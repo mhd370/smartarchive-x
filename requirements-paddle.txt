@@ -1,0 +1,3 @@
+# Optional extra: install a compatible paddlepaddle package first (CPU/GPU platform dependent).
+paddleocr>=3,<4
+numpy>=1.26,<3

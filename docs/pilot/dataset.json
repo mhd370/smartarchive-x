@@ -1,0 +1,87 @@
+{
+  "schema_version": "pilot-v1",
+  "decoding_environment": {
+    "Pillow": "11.3.0",
+    "PyMuPDF": null
+  },
+  "pixel_policy": "RGB dimensions + decoded bytes; no EXIF rotation",
+  "pdf_render_policy": "PyMuPDF RGB 300 DPI, annotations default; no enhancement",
+  "related_original_images": [
+    {
+      "path": "results/layout_ocr/page_001/original.png",
+      "sha256": "6ab3429397914e27e380cc911e291abff0c453e7c776f3777543f28dab4dc024",
+      "pixel_matches": [
+        {
+          "frame": 1,
+          "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "path": "results/layout_ocr_v02/page_001/original.png",
+      "sha256": "6ab3429397914e27e380cc911e291abff0c453e7c776f3777543f28dab4dc024",
+      "pixel_matches": [
+        {
+          "frame": 1,
+          "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "path": "results/layout_ocr_v03/page_001/original.png",
+      "sha256": "6ab3429397914e27e380cc911e291abff0c453e7c776f3777543f28dab4dc024",
+      "pixel_matches": [
+        {
+          "frame": 1,
+          "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "path": "results/quality_analysis/original_file.png",
+      "sha256": "f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "pixel_matches": [
+        {
+          "frame": 1,
+          "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+          "page": 1
+        }
+      ]
+    },
+    {
+      "path": "results/quality_analysis/page_001/original.png",
+      "sha256": "6ab3429397914e27e380cc911e291abff0c453e7c776f3777543f28dab4dc024",
+      "pixel_matches": [
+        {
+          "frame": 1,
+          "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+          "page": 1
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "source_path": "data/input/sample.png",
+      "source_aliases": [],
+      "source_sha256": "f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "bytes": 478508,
+      "split": "pilot",
+      "authorization_status": "PENDING_CONFIRMATION",
+      "pages": [
+        {
+          "page": 1,
+          "width": 665,
+          "height": 708,
+          "pixel_sha256": "4b8250e86782c77eeb540d20561294cdd2e2933c20b25b94b4a18084a3929bb5",
+          "ground_truth_status": "PENDING",
+          "reading_order_status": "PENDING_HUMAN_REVIEW"
+        }
+      ]
+    }
+  ]
+}

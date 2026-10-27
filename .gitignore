@@ -1,0 +1,30 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local secrets; example configuration may be committed.
+.env
+.env.*
+!.env.example
+.aws/
+
+# Local documents and evidence: these rules do not delete or back up files.
+/data/input/**
+/data/ground_truth/**
+/results/**
+!/data/input/.gitkeep
+!/data/ground_truth/.gitkeep
+!/results/.gitkeep
+
+# Proposed runtime storage, not implemented.
+/storage/**
+*.log

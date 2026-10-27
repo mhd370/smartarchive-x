@@ -1,0 +1,53 @@
+{
+  "schema_version": "benchmark-v1",
+  "entries": [
+    {
+      "document_id": "sample-001",
+      "source_path": "../../data/input/sample.png",
+      "source_sha256": "f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "split": "pilot",
+      "ground_truth_path": null,
+      "engine": {
+        "name": "tesseract",
+        "version": null
+      },
+      "language": "ara",
+      "ocr_runtime_seconds": null,
+      "variant": "legacy-fullpage-psm3",
+      "prediction_path": "../../results/layout_ocr/page_001/baseline_psm3.txt",
+      "configuration": {
+        "psm": 3,
+        "oem": 1
+      },
+      "preprocessing": {
+        "method": "none",
+        "provenance": "historical layout_ocr.py"
+      }
+    },
+    {
+      "document_id": "sample-001",
+      "source_path": "../../data/input/sample.png",
+      "source_sha256": "f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "split": "pilot",
+      "ground_truth_path": null,
+      "engine": {
+        "name": "tesseract",
+        "version": null
+      },
+      "language": "ara",
+      "ocr_runtime_seconds": null,
+      "variant": "legacy-rtl-regions-psm6",
+      "prediction_path": "../../results/layout_ocr/page_001/rtl_reading_order.txt",
+      "configuration": {
+        "psm": 6,
+        "oem": 1
+      },
+      "preprocessing": {
+        "method": "geometric two-column crops, right then left",
+        "provenance": "historical layout_ocr.py"
+      }
+    }
+  ]
+}

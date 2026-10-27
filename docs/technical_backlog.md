@@ -1,0 +1,42 @@
+# Prioritized technical backlog
+
+P0 blocks a trustworthy benchmark. P1 is required for the scoped demonstrator. P2 is conditional refinement. The table is the initial plan; Task 002 status below distinguishes delivered portions from remaining work. Eight-week windows are indicative for one developer, not commitments; transcription and authorization can dominate the schedule.
+
+| ID | Priority / window | Task and acceptance evidence | Dependencies |
+| --- | --- | --- | --- |
+| B01 | P0 / week 1 | Agree authorized dataset, GT mapping/reading order, Arabic normalization/BOM/blank-reference policy and document-level dev/test split. Review pilot transcripts independently; validator rejects duplicate IDs, split leakage and mapping errors. | Supervisor/data access |
+| B02 | P0 / week 1 | Exclusive run directories, source/derivative hashes, configuration/environment manifest, started/complete/partial/failed states; reject input/output aliasing and overwrite attempts. | None |
+| B03 | P0 / week 1 | New shared page/OCR/metric adapters: stable collision-safe IDs, all TIFF pages or explicit rejection, checked I/O, canonical unrounded CER/WER/edit counts, null metrics for unavailable GT. Preserve legacy code. | B01, B02 |
+| B04 | P0 / week 1 | Reconcile baseline/experiment requirements, record tested environment and Tesseract languages/config, engine preflight/timeouts, explicit page/engine failure and exit status. Paddle optional. | B02 |
+| B05 | P0 / weeks 1-2 | Test metric insert/delete/substitute, Arabic/diacritics/BOM/empty GT; IDs, TIFF/PDF pages, corrupt input, missing engine, unwritable output, partial runs, byte preservation and overwrite rejection. | B01-B04 |
+| B06 | P1 / week 2 | OCR Benchmark CLI/report: identical rendered pages, per-page/grouped CER/WER, explicit micro/macro aggregation, wall time, failure/GT coverage. Run full-page Tesseract before variants. No fabricated unlabeled scores. | B05, reviewed pilot GT |
+| B07 | P1 / week 3 | Quality routing: retain baseline, compare routes, calibrate on dev only, freeze before test; report CER/WER/latency/route coverage and fallback reasons. | B06, stratified GT |
+| B08 | P1 / week 3 | Layout reconstruction: coordinate transforms, explicit RTL order, baseline fallback, ambiguity review; assess omissions/duplicates/order against annotations. | B06 |
+| B09 | P1 / week 4 | Minimal FastAPI/ingestion/metadata persistence around tested contracts: immutable originals, source-linked metadata, bounded durable jobs/status, reviewer identity, authorization and review history. | B02-B05 |
+| B10 | P1 / week 5 | Reliability-gated multimodal classification: agreed taxonomy, text/visual baselines, fusion, abstention and review. Report document-held-out macro-F1, confusion matrix, accepted coverage/error and ablations. | B07-B09, labelled data |
+| B11 | P1 / week 6 | Confidence-aware hybrid search: lexical/vector/fusion baselines, OCR/review evidence, page/span/original provenance, judged queries and ranking ablations; index only complete active versions. | B08-B10, query judgments |
+| B12 | P1 / week 7 | Controlled reclassification: proposal/authorized approval, expected-version checks, old/new labels/reason, append-only events, index retry/rollback. Test denial, stale proposals and interrupted indexing. | B09-B11 |
+| B13 | P1 / week 8 | End-to-end evaluation/demo for all five research components, original-byte and backup/restore verification, documented failures/limitations and supervisor acceptance. | B07-B12 |
+| B14 | P2 / if justified | Alternate OCR/layout/model/store and performance optimization only after profiling. Do not delay the first benchmark for Paddle. | B06, measured need |
+
+## Task 002 status
+
+| Item | Delivered | Remaining |
+| --- | --- | --- |
+| B01 | gt-v1 schema/template, manual independent review workflow, source/page/hash association, split consistency checks | Authorized documents, genuine transcripts, institutional agreement on ordering/labels and split allocation |
+| B02 | Exclusive UTC/UUID runs, input/prediction/reference hashes/snapshots, started/final status, configuration/environment/source hashes | Backup/restore, crash recovery and producer-side artifact transactions |
+| B03 | Saved-text adapter, stable manifest IDs, canonical strict/normalized metrics and operation counts | Deterministic render/OCR adapters, TIFF/PDF page handling and original-image I/O |
+| B04 | Standard-library-only evaluator, supplied historical engine metadata, explicit unknowns and validation exit status | Legacy dependency reconciliation, native OCR preflight/timeouts and producer failure states |
+| B05 | New automated metric/Arabic/GT validation/run isolation/provenance/aggregation tests; legacy tests retained | Renderer/native OCR corruption/timeout/resource-limit tests |
+| B06 | Saved-output benchmark CLI, page/document/corpus JSON/CSV, micro/macro/coverage reporting | Real approved-GT baseline evaluation, comparable rendering/runtime collection and grouped research analysis |
+
+**Next: Task 003 — authorized reviewed pilot GT and deterministic page/prediction adapters**, completing remaining B01/B03-B06 before routing/enhancement comparisons. No UI/model expansion is needed. If timeline/data readiness requires reduced depth, agree explicitly with the supervisor rather than removing a research component silently.
+
+## Task 003 status
+
+- B01: deterministic full-source-hash IDs/page inventory, original-image relationships and pending annotation status delivered. Real authorization, independent transcripts and representative institutional sources remain pending.
+- B02/B05: append-only transcription/review versions, hash-chain verification, optimistic version guards, incomplete-label gating, independent-review attestations and correction tests delivered. Authentication, backup/restore and crash recovery remain open.
+- B03: historical whole-page/region/line adapters delivered with explicit bindings, source pixels, order/geometry and component-aggregate checks. Raster-frame/PDF inventory is implemented/tested. Native OCR execution, preflight/timeouts and complete invocation capture remain open.
+- B06: current pilot comparisons feed unchanged strict/normalized benchmark and preserve raw bytes/provenance. Seven real predictions produce NOT_EVALUATED, not accuracy measurements. Synthetic fixtures verify the approved workflow but are not institutional GT.
+
+**Next: Task 004 — human-labelled pilot completion and controlled baseline analysis.** Obtain independent approval and representative institutional sources first, then compare historical predictions on frozen GT. Decide whether a native OCR execution adapter is required for pilot expansion before adding routing or enhancements. Five research components remain in scope; this task implements infrastructure, not their scientific validation.

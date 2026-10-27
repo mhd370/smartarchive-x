@@ -1,0 +1,507 @@
+{
+  "schema_version": "pilot-unevaluated-example-v1",
+  "source_report": "results/pilot/20261027T214440Z_cd0ab1bf37724801b071af1d2bfd0842/evaluation/20261027T214440Z_4ee5808f664a45f69c84df6328aadac3/report.json",
+  "source_report_sha256": "cc9541da823825e9e3df09adbf58e08a27873b89865faff8a9d8ea352d615775",
+  "note": "Actual run; no human transcription or approval. No scores or rankings.",
+  "pages": [
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v1-whole",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v1-regions",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v2-whole",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v2-regions",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v3-whole",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v3-regions",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "variant": "historical-v3-lines",
+      "status": "NOT_EVALUATED",
+      "reason": "MISSING_GROUND_TRUTH"
+    }
+  ],
+  "summaries": [
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v1-whole",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v1-whole",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v1-regions",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v1-regions",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v2-whole",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v2-whole",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v2-regions",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v2-regions",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-whole",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-whole",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-regions",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-regions",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-lines",
+      "policy": "strict-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    },
+    {
+      "scope": "document",
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "variant": "historical-v3-lines",
+      "policy": "normalized-v1",
+      "total_pages": 1,
+      "evaluated_pages": 0,
+      "not_evaluated_pages": 1,
+      "invalid_pages": 0,
+      "cer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      },
+      "wer": {
+        "substitutions": 0,
+        "deletions": 0,
+        "insertions": 0,
+        "distance": 0,
+        "reference_units": 0,
+        "hypothesis_units": 0,
+        "micro_rate": null,
+        "macro_rate": null,
+        "defined_page_rates": 0
+      }
+    }
+  ]
+}

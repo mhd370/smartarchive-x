@@ -1,0 +1,54 @@
+{
+  "schema_version": "historical-bindings-v1",
+  "bindings": [
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v1",
+      "kind": "whole",
+      "directory": "results/layout_ocr/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v1",
+      "kind": "regions",
+      "directory": "results/layout_ocr/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v2",
+      "kind": "whole",
+      "directory": "results/layout_ocr_v02/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v2",
+      "kind": "regions",
+      "directory": "results/layout_ocr_v02/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v3",
+      "kind": "whole",
+      "directory": "results/layout_ocr_v03/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v3",
+      "kind": "regions",
+      "directory": "results/layout_ocr_v03/page_001"
+    },
+    {
+      "document_id": "doc-f000d4598d57c79c5f3db5f308c26960c0c73170c7d30862efad6d66106b40cc",
+      "page": 1,
+      "layout": "v3",
+      "kind": "lines",
+      "directory": "results/layout_ocr_v03/page_001"
+    }
+  ]
+}

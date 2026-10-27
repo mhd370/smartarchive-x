@@ -1,0 +1,19 @@
+{
+  "schema_version": "gt-v1",
+  "document_id": "REPLACE_WITH_STABLE_DOCUMENT_ID",
+  "source_sha256": "REPLACE_WITH_SOURCE_SHA256",
+  "page": 1,
+  "text_path": "page_001.txt",
+  "text_sha256": "REPLACE_AFTER_MANUAL_TRANSCRIPTION",
+  "is_blank": false,
+  "reading_order": [
+    "REPLACE_WITH_ACTUAL_FIRST_REGION_DESCRIPTION",
+    "REPLACE_WITH_ACTUAL_SECOND_REGION_DESCRIPTION"
+  ],
+  "transcriber": "REPLACE_WITH_TRANSCRIBER_ID",
+  "review": {
+    "status": "draft",
+    "reviewer": null,
+    "reviewed_at": null
+  }
+}
