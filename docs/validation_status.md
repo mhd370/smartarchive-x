@@ -1,6 +1,6 @@
 # Testing and validation status
 
-This document records Task 001. Current pilot/review/adapter results are in [Task 003 validation](task_003_validation.md); benchmark foundations are in [Task 002 validation](task_002_validation.md). Historical audit observations below are preserved.
+This document records Task 001. Current manual-workspace and comparison readiness is in [Task 004 validation](task_004_validation.md); pilot adapters are in [Task 003 validation](task_003_validation.md), and benchmark foundations are in [Task 002 validation](task_002_validation.md). Historical audit observations below are preserved.
 
 Executed on 2026-10-27 in the supplied Windows workspace using `.venv/Scripts/python.exe`. No packages were installed and no historical experiment was rerun into its original directory.
 

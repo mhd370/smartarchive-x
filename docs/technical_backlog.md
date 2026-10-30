@@ -40,3 +40,12 @@ P0 blocks a trustworthy benchmark. P1 is required for the scoped demonstrator. P
 - B06: current pilot comparisons feed unchanged strict/normalized benchmark and preserve raw bytes/provenance. Seven real predictions produce NOT_EVALUATED, not accuracy measurements. Synthetic fixtures verify the approved workflow but are not institutional GT.
 
 **Next: Task 004 — human-labelled pilot completion and controlled baseline analysis.** Obtain independent approval and representative institutional sources first, then compare historical predictions on frozen GT. Decide whether a native OCR execution adapter is required for pilot expansion before adding routing or enhancements. Five research components remain in scope; this task implements infrastructure, not their scientific validation.
+
+## Task 004 status and Task 005
+
+- B01: offline blank RTL editor beside the source, read-only frozen-reference workspace, explicit annotation/coverage checklist and exact human handoff delivered. Actual transcription, authorization confirmation and independent approval remain pending; no reference was invented.
+- B05: focused regressions cover blank initialization, reference escaping/pinning, source identity, no approval side effect, analysis gating, policy separation and overwrite/tamper rejection.
+- B06: new comparisons generate per-Tesseract-variant/page accuracy CSV and error-analysis JSON/Markdown from existing benchmark results, with source-report/association hashes and raw snapshot checks. The real seven-variant run remains NOT_EVALUATED. No rankings or improvement claims.
+- Git baseline cbea099 is accessible via the installed Git executable; no commit was made.
+
+**Task 005 recommendation:** complete the human transcription/review steps in first_arabic_gt.md, then analyze approved baseline errors before choosing further OCR work. Expand representative authorized institutional pages. Do not add routing, new OCR models or enhancement algorithms to bypass the missing-reference boundary.

@@ -36,6 +36,8 @@ The benchmark needs Python 3.11 only. The sample reports `NOT_EVALUATED` because
 
 Task 003 adds a deterministic [pilot manifest](docs/pilot/dataset.json), seven explicit historical whole-page/region/line bindings, and immutable transcription revisions with independent review/approval. No real transcription or approval has been invented. The one sample is literary/educational, not representative institutional evidence. See the [pilot workflow](docs/pilot_workflow.md) for exact inspection, manual submission, review, approval and comparison commands.
 
+Task 004 adds an offline, source-side RTL transcription workspace and read-only frozen-reference view. New pilot comparisons include per-variant/page accuracy CSV and error-analysis JSON/Markdown, using unchanged metrics and GT approval logic. **Human transcription and independent approval are still required; no real accuracy is available.** Follow the [first Arabic GT handoff](docs/first_arabic_gt.md) for exact PowerShell steps. Git access and baseline `cbea099` are confirmed via `C:/Program Files/Git/cmd/git.exe`; no commit is created by these tasks.
+
 ```powershell
 .\.venv\Scripts\python.exe tools/pilot_ocr.py inspect
 .\.venv\Scripts\python.exe tools/pilot_ocr.py inventory --check
@@ -94,4 +96,4 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 ## Next engineering task
 
-Task 004 should complete authorization and actual independent transcription/review, expand toward representative institutional pages and analyze pinned historical baselines. Source inventory, versioned review and historical adapters are implemented; human labels and native OCR execution adapters remain outstanding. No routing thresholds or enhancements should be promoted from one unlabeled page.
+Task 005 should complete the human transcription/independent-review handoff and analyze the first pinned historical baseline errors, then expand toward representative institutional pages. Native OCR execution adapters remain outstanding. No routing thresholds or enhancements should be promoted from one unlabeled page.

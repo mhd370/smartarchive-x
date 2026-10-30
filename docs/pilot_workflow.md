@@ -1,5 +1,7 @@
 # Task 003 — pilot sources, human GT and historical adapters
 
+Task 004 adds an offline RTL editor and read-only source/reference review workspace without replacing this GT workflow. New comparisons also generate approved-only error-analysis artifacts. See [first Arabic GT instructions](first_arabic_gt.md) for the current human handoff and [Task 004 validation](task_004_validation.md). No real GT has yet been submitted or approved.
+
 The implemented pilot contains **one source document/page**, not a representative institutional dataset. Visual inspection found a 665×708 Arabic literary/educational page with a spanning heading and two columns. Its institutional-use authorization, full transcription and human reading-order confirmation remain pending. No reference text was generated from that inspection or from OCR.
 
 ## Inventory and association

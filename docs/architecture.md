@@ -6,6 +6,8 @@ Task 002 update: `src/smartarchive/evaluation/` now implements the saved-text be
 
 Task 003 extends that same evaluation boundary with `pilot.py` (source/page inventory), `ground_truth.py` (append-only local revisions/review attestations), `historical.py` (explicit saved-output adapters) and `pilot_cli.py`. No major structural change, OCR execution, production review service or other platform area is introduced. GT sidecars remain gt-v1; history is stored alongside them. See [pilot workflow](pilot_workflow.md).
 
+Task 004 adds `review_workspace.py` for offline source/RTL-text HTML workspaces and `error_analysis.py` for describing existing benchmark measurements. Both remain within evaluation; they introduce no server, package dependency, new metric policy or approval mechanism. CLI `workspace` prepares files only, and `compare` adds non-overwriting analysis artifacts. This is a local research aid, not the platform frontend.
+
 ## Approach and migration
 
 Use a modular monolith: thin FastAPI routes, application services, domain contracts and replaceable processing/storage adapters. Avoid microservices, distributed queues and multiple databases for an eight-week solo project. Add dependencies only when implementing the corresponding feature.

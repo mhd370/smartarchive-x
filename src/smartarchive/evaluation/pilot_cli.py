@@ -3,10 +3,12 @@ import argparse
 from pathlib import Path
 
 from .ground_truth import current, submit, transition
+from .error_analysis import write_analysis
 from .historical import prepare
 from .metrics import POLICIES
 from .pilot import inventory, load_dataset
 from .runner import run
+from .review_workspace import create_workspace
 from .tracking import write_json
 from .validation import ValidationError, parse_json, read_bytes
 
@@ -22,6 +24,11 @@ def main(argv=None) -> int:
     scan.add_argument('--output', type=Path, default=Path('docs/pilot/dataset.json'))
     scan.add_argument('--check', action='store_true')
     commands.add_parser('inspect', help='Validate and list source pages/current GT status')
+    workspace = commands.add_parser('workspace', help='Offline source/RTL text editor; no GT submission or approval')
+    workspace.add_argument('--document', required=True)
+    workspace.add_argument('--page', type=int, required=True)
+    workspace.add_argument('--output-root', type=Path, default=Path('results/transcription'))
+    workspace.add_argument('--review-only', action='store_true', help='Read-only frozen human reference; requires a submitted version')
     add = commands.add_parser('submit', help='Snapshot independently transcribed page as a new draft')
     add.add_argument('--text', type=Path, required=True)
     add.add_argument('--transcriber', required=True)
@@ -58,6 +65,12 @@ def main(argv=None) -> int:
             return 0
         dataset = load_dataset(root / args.dataset, root)
         store = root / args.store
+        if args.command == 'workspace':
+            folder = create_workspace(root, dataset, store, args.document, args.page,
+                                      root / args.output_root, review_only=args.review_only)
+            print(f'Workspace: {folder / "workspace.html"}')
+            print('Open locally. No transcript is submitted or approved by this command.')
+            return 0
         if args.command == 'inspect':
             for document in dataset['documents']:
                 for page in document['pages']:
@@ -81,7 +94,9 @@ def main(argv=None) -> int:
             bundle = prepare(root, dataset, bindings, root / args.output_root, store)
             print(f'Historical import bundle: {bundle}')
             folder, report = run(bundle / 'benchmark.json', bundle / 'evaluation', list(POLICIES))
+            analysis = write_analysis(folder / 'report.json', associations_path=bundle / 'associations.json')
             print(f"{report['status']}: {folder}")
+            print(f"Error analysis: {analysis['status']} ({folder / 'error_analysis.md'})")
             for row in report['pages']:
                 print(f"{row['variant']}: {row['status']} {row.get('reason') or ''}")
             return 0 if report['status'] == 'COMPLETED' else 2

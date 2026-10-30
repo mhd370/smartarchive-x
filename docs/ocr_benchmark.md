@@ -1,5 +1,7 @@
 # OCR Benchmark Foundations — Task 002
 
+Task 004 adds [offline manual preparation/review workspaces](first_arabic_gt.md) and per-page error-analysis artifacts on new pilot comparisons. Task 002 metrics and schema remain unchanged; no numerical scores are generated for pending/unapproved GT.
+
 Task 003 update: the unchanged evaluator is now fed by [pilot inventory, versioned human review and historical prediction adapters](pilot_workflow.md). Use `tools/pilot_ocr.py compare` to prepare current page-bound predictions and latest GT. Existing Task 002 entry points/policies remain compatible. The pilot still has no human-approved real transcript.
 
 Implemented: saved-text evaluation, versioned strict/normalized CER/WER with operation counts, approved-GT validation, isolated runs, provenance and page/document/corpus reports. Python 3.11 standard library only; no OCR engine is invoked and no winner is selected. This supports future quality-routing/layout experiments. Classification, retrieval and controlled reclassification remain planned, together with the other research components.
