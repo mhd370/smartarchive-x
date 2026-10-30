@@ -28,3 +28,14 @@ dist/
 # Proposed runtime storage, not implemented.
 /storage/**
 *.log
+
+# Local web/runtime tooling and build outputs
+.tools/
+node_modules/
+.next/
+.next-e2e/
+*.tsbuildinfo
+/frontend/playwright-report/
+/frontend/test-results/
+/frontend/next-env.d.ts
+!/frontend/.env.example

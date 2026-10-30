@@ -1,6 +1,32 @@
 # SmartArchive-X
 
-Intelligent Arabic institutional document archiving graduation project. **Current status: OCR experiments, benchmark foundations and a pending-GT pilot with historical prediction adapters; not a complete archival application.** Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+Intelligent Arabic institutional document archiving graduation project. **Current status: first local full-stack archive application plus preserved OCR research tools.** FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+
+## Run the web application
+
+From the repository root, install dependencies:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe tools/frontend.py ci
+```
+
+Node.js LTS is required; the helper also detects the local portable runtime under `.tools/`. Run these in two PowerShell terminals:
+
+```powershell
+# Terminal 1 — API
+.\.venv\Scripts\python.exe -m uvicorn smartarchive.api.app:app --app-dir src --host 127.0.0.1 --port 8000
+```
+
+```powershell
+# Terminal 2 — frontend
+$env:NEXT_PUBLIC_API_URL = 'http://127.0.0.1:8000'
+.\.venv\Scripts\python.exe tools/frontend.py run dev
+```
+
+Open **http://127.0.0.1:3000**. Upload an authorized PDF/image, find it in Documents, preview/download its unchanged original and refresh the dashboard to see persisted counts. Metadata/audit live in `storage/archive.sqlite3`; originals live in `storage/originals/`. No fake documents or statistics are seeded.
+
+Uploads are stored and validated; **OCR/classification are not connected**, so extraction/confidence results remain unavailable. This is a loopback-only prototype without authentication, not a public institutional deployment. See [startup/configuration/API documentation](docs/web_application.md) and [Task 005 validation](docs/task_005_validation.md).
 
 ## Research scope
 
@@ -46,7 +72,7 @@ Task 004 adds an offline, source-side RTL transcription workspace and read-only 
 
 The pilot decodes images with existing Pillow (PDFs use existing PyMuPDF). It never invokes OCR and does not add dependencies. Pending/unapproved GT yields `NOT_EVALUATED`. [Task 003 validation](docs/task_003_validation.md) records verification and changed files.
 
-FastAPI, durable archiving, metadata workflows, calibrated routing, classification, hybrid retrieval, authenticated review and controlled reclassification are **proposed and unimplemented**. Local GT review attestations are now supported by the benchmark.
+Task 005 implements FastAPI ingestion, SQLite document/audit persistence, original storage and the connected web interface. OCR routing, extraction workflows, classification, hybrid retrieval, authenticated review and controlled reclassification remain **unimplemented application features**. Local GT review attestations continue to work in the separate benchmark tools.
 
 Read the [audit](docs/repository_audit.md), [architecture and proposed directory structure](docs/architecture.md), [backlog](docs/technical_backlog.md), [risks and decisions](docs/risks_and_decisions.md), and [validation status](docs/validation_status.md).
 
@@ -96,4 +122,4 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 ## Next engineering task
 
-Task 005 should complete the human transcription/independent-review handoff and analyze the first pinned historical baseline errors, then expand toward representative institutional pages. Native OCR execution adapters remain outstanding. No routing thresholds or enhancements should be promoted from one unlabeled page.
+Task 006 should connect a versioned, bounded OCR processing job and human-review state to the stored-document lifecycle, while completing approved GT for objective evaluation. Preserve full-page baseline/fallback and traceability; do not invent confidence or claim improvements without evidence. Institutional deployment also requires authentication/access control and backup/recovery.

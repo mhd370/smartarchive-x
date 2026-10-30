@@ -1,5 +1,40 @@
 # Proposed engineering architecture
 
+## Task 005 implemented vertical slice
+
+The user's Task 005 priority change advances the local application now; pending GT does not block upload/storage/preview work. The historical target design below remains a roadmap. Implemented application boundaries are:
+
+```text
+src/smartarchive/
+  config.py                      # local paths, upload limits, explicit CORS origins
+  domain/documents.py            # lifecycle vocabulary and application errors
+  persistence/database.py        # SQLite repositories, transactions, audit/immutability triggers
+  persistence/storage.py         # bounded type validation, exclusive original publication, hashes
+  services/documents.py          # ingestion and document lookup; no OCR execution
+  api/app.py                     # FastAPI factory, lifespan and document endpoints
+  api/schemas.py                 # typed public response contracts
+  api/middleware.py              # pre-parser request size/origin checks
+  evaluation/                    # Task 002–004 research modules, unchanged
+frontend/
+  app/                           # RTL dashboard, documents, upload and details routes
+  components/                    # shared shell, feedback, status and table components
+  lib/                           # typed API client, loading/cancellation hook and formatting
+  tests/                         # real Edge end-to-end flow against isolated API/storage
+storage/                         # ignored runtime state, separate from research data/results
+  archive.sqlite3
+  originals/<uuid>/original.ext
+```
+
+FastAPI sync endpoints delegate ingestion to a service and local adapters. SQLite connections are short-lived/per-operation; upload record and audit event commit together. Original bytes are streamed into a request-owned staging file, validated and published without overwrite under a generated UUID. A filesystem/DB crash gap remains: an orphan original is retained for reconciliation rather than deleted on ambiguous failure. The API rechecks file hash/size before delivery. This is application-level immutability, not a write-once storage device.
+
+The Next app is an independent client of actual API endpoints; counts/search filters are server-derived. Upload success comes only from API 201. No fixture data seeds default storage. The API reports `stored / OCR_NOT_CONFIGURED`, with unavailable extraction/confidence/classification, rather than pretending a job ran. The status enum reserves future job states but no background queue is implemented. Production document IDs are UUIDs; research page IDs remain unchanged. A later processing adapter must explicitly associate them by source identity/run provenance.
+
+All original experiments, GT approval/version control, benchmark metrics and historical predictions remain independent. No research threshold is promoted into application logic. The existing five components will attach as versioned processing/review/indexing services; this slice implements the preservation/metadata/traceability foundation they need. Authentication, real human-review UI, bounded persistent OCR jobs and recovery remain future work.
+
+See [application startup/API documentation](web_application.md) and [Task 005 validation](task_005_validation.md) for exact implemented behavior and limits. Local servers bind loopback; unauthenticated access is not an institutional deployment model.
+
+## Earlier target design and progress notes
+
 Date: 2026-10-27. This is a target design, **not implemented application functionality**. No experimental source is moved or refactored in this audit.
 
 Task 002 update: `src/smartarchive/evaluation/` now implements the saved-text benchmark portion of the proposed package. It contains metrics, validation, run tracking and CLI orchestration, with a repository-local launcher in `tools/benchmark_ocr.py`. No other proposed package areas are implemented. This is the incremental transition described below; historical scripts remain independent. See [benchmark guide](ocr_benchmark.md) for implemented contracts and policies.

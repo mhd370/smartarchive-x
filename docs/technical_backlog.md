@@ -1,5 +1,18 @@
 # Prioritized technical backlog
 
+## Task 005 priority change and current delivery
+
+The user explicitly prioritized a usable application over another research-only task. GT remains pending but does not block document ingestion. Current delivered work:
+
+- B09 (partial): FastAPI modular API, SQLite persistence, immutable-by-application original storage, source hashes/metadata, processing status, append-only document events, download and preview. Authentication, reviewer authorization, persistent OCR workers and restart recovery are still open.
+- Connected Next.js/TypeScript/Tailwind RTL application: real dashboard counts, paginated filename search/status/type filters, validated upload/progress, details, original preview/download and audit history. Explicit empty/loading/error states; no seeded statistics/documents.
+- Meaningful API tests and real Edge browser tests using separate test storage. All existing research code/tests/results preserved.
+- OCR-related status is `stored`, not queued/complete. All five research contributions remain planned integration/evaluation milestones; Task 005 introduces no new engine, enhancement or invented extraction/confidence.
+
+**Next development task (Task 006):** add a bounded, persisted processing-job lifecycle linked to document/source/run versions and an existing full-page baseline adapter, with failure/timeout/retry handling and review-required results. Complete independent GT in parallel before research comparisons. Add authentication/access control and backup/reconciliation before any shared institutional deployment. Hybrid search, classification and controlled reclassification remain subsequent scope, not implicit features of filename search.
+
+The earlier B01–B14 plan and historical task notes follow as progress context, not a requirement to delay this delivered vertical slice.
+
 P0 blocks a trustworthy benchmark. P1 is required for the scoped demonstrator. P2 is conditional refinement. The table is the initial plan; Task 002 status below distinguishes delivered portions from remaining work. Eight-week windows are indicative for one developer, not commitments; transcription and authorization can dominate the schedule.
 
 | ID | Priority / window | Task and acceptance evidence | Dependencies |
