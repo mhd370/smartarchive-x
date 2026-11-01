@@ -1,18 +1,13 @@
 {
   "task": "006",
   "base": "v0.5.0",
-  "created_at": "2026-11-01T21:59:16.629105+00:00",
+  "created_at": "2026-11-01T23:30:51.380624+00:00",
   "note": "Pre-task files left unchanged by this task.",
   "files": [
     {
       "path": ".env.example",
       "sha256": "45b72808e5feff172b358c8a7d2373956feef9eef52b6a5b17bcf4fc2c3b29ab",
       "size": 221
-    },
-    {
-      "path": ".gitignore",
-      "sha256": "fe5d1ad7f1dd4aec6b6452bebfb3242dd413b951d6e8eebd21a550b05026a447",
-      "size": 673
     },
     {
       "path": "compare_ocr.py",
@@ -155,11 +150,6 @@
       "size": 6101
     },
     {
-      "path": "frontend/.env.example",
-      "sha256": "b6c595b28af6f6e14a85a22a25d4c56673a91c380acd244610feea5b32b3974d",
-      "size": 101
-    },
-    {
       "path": "frontend/AGENTS.md",
       "sha256": "063098f6cb31bb44c6f8fbea25b3876de7ee1e5f7d00a50dbab506f6415eb7f0",
       "size": 679
@@ -173,11 +163,6 @@
       "path": "frontend/app/documents/page.tsx",
       "sha256": "0b5104f0715fe303a1bd1df8775592fceb545fce54d6e9f25ed1371eb1ea11d5",
       "size": 211
-    },
-    {
-      "path": "frontend/app/documents/table.tsx",
-      "sha256": "9851ac204fa60f84f70067918c850505f789117ac453876ce5d6b8a7c7e6cc2d",
-      "size": 3658
     },
     {
       "path": "frontend/app/error.tsx",
@@ -200,21 +185,6 @@
       "size": 301
     },
     {
-      "path": "frontend/app/page.tsx",
-      "sha256": "e084c43f186507bc39b37cc5a9160b760dad3b98d3602f0e998acbea58963e6b",
-      "size": 3776
-    },
-    {
-      "path": "frontend/components/ui.tsx",
-      "sha256": "dd1041edb4029a912cbacf65655d7feef07734dea512954524af63f689880697",
-      "size": 2701
-    },
-    {
-      "path": "frontend/next.config.ts",
-      "sha256": "65435867014863f0d00e8deee8ee79b4839e708d77238d0f9fe1264ba4ea920d",
-      "size": 464
-    },
-    {
       "path": "frontend/package-lock.json",
       "sha256": "c8dda0c295fd33d28929200896c9c84bc2082aac81b75e1cbe8f76ce45f854ba",
       "size": 58830
@@ -225,19 +195,9 @@
       "size": 707
     },
     {
-      "path": "frontend/playwright.config.ts",
-      "sha256": "8c484050bc888615081735551d94e685b0720445f6cf13657e3a2c3590e1a3cc",
-      "size": 1303
-    },
-    {
       "path": "frontend/postcss.config.mjs",
       "sha256": "a1a188221f064d964dd9958c3d48b0c23252fabbeb6099d95ee8e15c764718b0",
       "size": 60
-    },
-    {
-      "path": "frontend/tsconfig.json",
-      "sha256": "6dca8fab49d947e387dc8c05a14e0649a5088480adc24f4cf8202be0d3184a0f",
-      "size": 766
     },
     {
       "path": "layout_ocr.py",

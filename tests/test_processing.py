@@ -100,6 +100,19 @@ class QualityTests(unittest.TestCase):
     def test_blank_page_is_flagged(self):
         quality = assess(Image.new('RGB', (800, 1100), 'white'), 300)
         self.assertTrue(quality.blank)
+        noise = np.random.default_rng(1).normal(240, 3, (1100, 800)).clip(0, 255).astype(np.uint8)
+        self.assertTrue(assess(Image.fromarray(noise).convert('RGB'), 300).blank)
+
+    def test_sparse_letter_is_not_blank(self):
+        # Regression: an official letter has ~1% ink, so both histogram tails are paper.
+        page = Image.new('RGB', (1654, 2339), 'white')
+        draw, font = ImageDraw.Draw(page), ImageFont.load_default(size=38)
+        for row in range(6):
+            draw.text((300, 400 + row * 78), 'archive decision letter', fill='#111', font=font)
+        self.assertLess((np.asarray(page.convert('L')) < 128).mean(), 0.02)
+        quality = assess(page, 200)
+        self.assertFalse(quality.blank)
+        self.assertGreater(quality.contrast, 0.9)
 
 
 class PreprocessTests(unittest.TestCase):

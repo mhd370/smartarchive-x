@@ -20,7 +20,6 @@ Node.js LTS is required; the helper also detects the local portable runtime unde
 
 ```powershell
 # Terminal 2 — frontend
-$env:NEXT_PUBLIC_API_URL = 'http://127.0.0.1:8000'
 .\.venv\Scripts\python.exe tools/frontend.py run dev
 ```
 

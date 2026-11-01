@@ -35,7 +35,6 @@ API docs: `http://127.0.0.1:8000/docs`. Health: `http://127.0.0.1:8000/api/healt
 
 ```powershell
 Set-Location 'C:\Users\lenovo\Desktop\SmartArchive-X_POC'
-$env:NEXT_PUBLIC_API_URL = 'http://127.0.0.1:8000'
 .\.venv\Scripts\python.exe tools/frontend.py run dev
 ```
 
@@ -51,7 +50,7 @@ Production build/local preview:
 .\.venv\Scripts\python.exe tools/frontend.py run start
 ```
 
-The API URL is browser-accessible and compiled into the Next client bundle: set `NEXT_PUBLIC_API_URL` before building, and rebuild when changing it. This local preview is not an authenticated institutional deployment.
+The browser only talks to the frontend origin; Next forwards `/api/*` to `SMARTARCHIVE_API_ORIGIN` (read at start-up). `NEXT_PUBLIC_API_URL` is compiled into the client bundle and is only needed for a direct-API setup. Use TLS before any network deployment.
 
 The scripts use the supported Webpack builder on Windows. Initial optional SWC compiler downloads were interrupted on this machine; the official native package was restored only after verifying its npm SHA-512 integrity. No compiler binary or `node_modules` is committed. If a fresh install reports a missing compiler, retry the dependency install and follow the official [SWC loading guidance](https://nextjs.org/docs/messages/failed-loading-swc); do not disable TLS or change OCR code to work around a web-toolchain failure.
 
@@ -62,7 +61,8 @@ The scripts use the supported Webpack builder on Windows. Initial optional SWC c
 | `SMARTARCHIVE_STORAGE_DIR` | repository `storage/` | SQLite plus original files; keep separate from research data/results |
 | `SMARTARCHIVE_MAX_UPLOAD_MB` | 32 | File limit, configurable 1–128 MiB; request envelope gets 1 MiB overhead allowance |
 | `SMARTARCHIVE_CORS_ORIGINS` | localhost/127.0.0.1:3000 | Explicit browser origins; wildcard rejected |
-| `NEXT_PUBLIC_API_URL` | http://127.0.0.1:8000 | Browser API origin, without `/api` suffix |
+| `SMARTARCHIVE_API_ORIGIN` | http://127.0.0.1:8000 | FastAPI origin that Next forwards `/api/*` to; the browser uses one address (no CORS, first-party cookies) |
+| `NEXT_PUBLIC_API_URL` | empty (same origin) | Optional direct API origin for the browser, without `/api` suffix |
 | `SMARTARCHIVE_NEXT_DIR` | .next | Optional separate Next build directory, used by browser tests |
 | `SMARTARCHIVE_TESSERACT_CMD` | auto (`PATH`, then `C:\Program Files\Tesseract-OCR\tesseract.exe`) | Tesseract executable (Task 006) |
 | `SMARTARCHIVE_OCR_LANGUAGES` | `ara+eng` | Requested languages; only installed ones are used and the actual set is recorded per run |

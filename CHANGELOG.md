@@ -11,6 +11,10 @@
   run history, re-run button. Low-confidence pages flagged for review.
 - Seeded degradation generator (`tools/degrade_pages.py`) for the simulation experiments.
 - `tools/check.py` local quality gate; ADRs 0001–0003.
+- The frontend forwards `/api/*` to FastAPI, so the browser uses one origin (no cross-port requests).
+- Fix (found in manual review): sparse letters (<2% ink) were classified as blank pages; contrast is now
+  measured as ink against paper. Regression test added.
+- Upload buttons are hidden from roles without upload permission (the API already refused them).
 
 ## 0.5.0 — Task 005
 - First full-stack archive: upload, immutable originals with SHA-256, SQLite metadata, audit, preview,

@@ -129,10 +129,15 @@ def assess(image: Image.Image, dpi: float | None,
            weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)) -> Quality:
     gray = _scaled_gray(image)
     mask = ink_mask(gray)
-    p2, p98 = np.percentile(gray, (2, 98))
-    contrast_range = float(p98 - p2) / 255.0
-    ink_ratio = float((mask > 0).mean())
-    blank = ink_ratio < 0.003 or contrast_range < 0.08
+    ink = mask > 0
+    ink_ratio = float(ink.mean())
+    # Ink-vs-paper contrast. Global percentiles fail on sparse letters, where ink is under 2% of
+    # the page and both tails of the histogram are paper.
+    if ink.any() and (~ink).any():
+        contrast_range = float(np.median(gray[~ink]) - np.percentile(gray[ink], 10)) / 255.0
+    else:
+        contrast_range = 0.0
+    blank = ink_ratio < 0.001 or contrast_range < 0.08
     laplacian = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     background = mask == 0
     residual = gray.astype(np.int16) - cv2.medianBlur(gray, 3).astype(np.int16)

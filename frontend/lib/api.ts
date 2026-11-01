@@ -35,7 +35,8 @@ export type User = { id: string; username: string; display_name: string; role: R
   created_at: string; permissions: Permission[] };
 export type AuthStatus = { setup_required: boolean; authenticated: boolean };
 
-const base = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+// Empty = same origin (Next forwards /api to FastAPI); set NEXT_PUBLIC_API_URL only to call the API directly.
+const base = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 export const apiUrl = (path: string) => `${base}/api${path}`;
 
 /** Raised when the server session is missing or expired; the shell redirects to the sign-in page. */

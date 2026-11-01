@@ -16,6 +16,6 @@ export default defineConfig({
       env: { SMARTARCHIVE_STORAGE_DIR: storage, SMARTARCHIVE_CORS_ORIGINS: "http://127.0.0.1:3001" } },
     { command: "node node_modules/next/dist/bin/next dev --webpack --hostname 127.0.0.1 --port 3001",
       url: "http://127.0.0.1:3001", reuseExistingServer: false, timeout: 120_000,
-      env: { NEXT_PUBLIC_API_URL: "http://127.0.0.1:8001", SMARTARCHIVE_NEXT_DIR: ".next-e2e", NEXT_TELEMETRY_DISABLED: "1" } },
+      env: { SMARTARCHIVE_API_ORIGIN: "http://127.0.0.1:8001", SMARTARCHIVE_NEXT_DIR: ".next-e2e", NEXT_TELEMETRY_DISABLED: "1" } },
   ],
 });
