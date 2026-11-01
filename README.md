@@ -1,6 +1,6 @@
 # SmartArchive-X
 
-Intelligent Arabic institutional document archiving graduation project. **Current status: first local full-stack archive application plus preserved OCR research tools.** FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+Intelligent Arabic institutional document archiving graduation project. **Current status (v0.6.0, Sprint 1): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
 
 ## Run the web application
 
@@ -20,7 +20,6 @@ Node.js LTS is required; the helper also detects the local portable runtime unde
 
 ```powershell
 # Terminal 2 — frontend
-$env:NEXT_PUBLIC_API_URL = 'http://127.0.0.1:8000'
 .\.venv\Scripts\python.exe tools/frontend.py run dev
 ```
 
@@ -110,6 +109,15 @@ $layoutOutput = 'results/manual_layout_' + [guid]::NewGuid().ToString('N')
 ```
 
 Use authorized samples. Historical baseline GT naming is `<source_stem>__p001.txt`; v03 uses `page_001.txt`. These scripts remain unchanged. The new benchmark uses explicit source/page-bound sidecars and versioned policies in its guide. Missing GT means unavailable metrics, never zero error.
+
+## Quality gate
+
+```powershell
+.\.venv\Scripts\python.exe tools/check.py          # Python tests, preservation, TypeScript
+.\.venv\Scripts\python.exe tools/check.py --full   # + production build and browser tests
+```
+
+Decisions are recorded in `docs/adr/`; changes per version in `CHANGELOG.md`.
 
 ## Foundation checks
 

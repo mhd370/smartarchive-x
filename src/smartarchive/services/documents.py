@@ -16,12 +16,13 @@ class Documents:
     def __init__(self, db: Database, store: OriginalStore):
         self.db, self.store = db, store
 
-    def ingest(self, stream, filename: str | None, declared_mime: str | None) -> dict:
+    def ingest(self, stream, filename: str | None, declared_mime: str | None, actor: str = 'local',
+               reason: str = 'OCR_NOT_CONFIGURED') -> dict:
         record = self.store.save(stream, safe_filename(filename), declared_mime)
         time = now()
-        record.update(status='stored', status_reason='OCR_NOT_CONFIGURED', created_at=time, updated_at=time)
+        record.update(status='stored', status_reason=reason, created_at=time, updated_at=time)
         try:
-            self.db.insert(record)
+            self.db.insert(record, actor)
         except Exception:
             # Retain a published original on DB failure for manual reconciliation;
             # never risk deleting an original after an ambiguous commit outcome.

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -6,10 +6,39 @@ import { execFileSync } from "node:child_process";
 
 test.describe.configure({ mode: "serial" });
 const hash = (buffer: Buffer) => createHash("sha256").update(buffer).digest("hex");
+const ADMIN = { name: "مدير الاختبار", username: "e2e-admin", password: "e2e-password-1" };
 
-test("real Arabic image: upload, persist, preview, download, search and mobile layout", async ({ page }, info) => {
+/** Fresh storage per run: the first visit creates the admin account, later ones sign in. */
+async function signIn(page: Page) {
+  await page.goto("/login");
+  const setup = page.getByRole("heading", { name: "إعداد حساب المدير", exact: true });
+  const login = page.getByRole("heading", { name: "تسجيل الدخول", exact: true });
+  await expect(setup.or(login)).toBeVisible();
+  if (await setup.isVisible()) {
+    await page.getByLabel("الاسم الظاهر", { exact: true }).fill(ADMIN.name);
+    await page.getByLabel("اسم المستخدم", { exact: true }).fill(ADMIN.username);
+    await page.getByLabel("كلمة المرور", { exact: true }).fill(ADMIN.password);
+    await page.getByLabel("تأكيد كلمة المرور", { exact: true }).fill(ADMIN.password);
+    await page.getByRole("button", { name: "إنشاء الحساب والدخول", exact: true }).click();
+  } else {
+    await page.getByLabel("اسم المستخدم", { exact: true }).fill(ADMIN.username);
+    await page.getByLabel("كلمة المرور", { exact: true }).fill(ADMIN.password);
+    await page.getByRole("button", { name: "دخول", exact: true }).click();
+  }
+  await expect(page).toHaveURL("http://127.0.0.1:3001/");
+  await expect(page.getByText(ADMIN.name, { exact: true })).toBeVisible();
+}
+
+test("signed-out visitor is sent to sign-in and nothing is exposed", async ({ page }) => {
+  await page.goto("/documents");
+  await expect(page).toHaveURL(/\/login\?next=%2Fdocuments/);
+  await expect(page.getByRole("navigation", { name: "التنقل الرئيسي" })).toHaveCount(0);
+});
+
+test("real Arabic image: upload, OCR, quality, preview, download, search and mobile layout", async ({ page }, info) => {
+  test.setTimeout(240_000);
   const source = await fs.readFile(path.resolve(__dirname, "../../data/input/sample.png"));
-  await page.goto("/");
+  await signIn(page);
   await expect(page.getByTestId("document-count")).toHaveText(/^[0٠]$/);
   await page.getByRole("link", { name: "رفع أول مستند", exact: true }).click();
   await page.locator("#document-file").setInputFiles({ name: "نص عربي.png", mimeType: "image/png", buffer: source });
@@ -25,6 +54,14 @@ test("real Arabic image: upload, persist, preview, download, search and mobile l
   await expect.poll(() => page.getByAltText("معاينة نص عربي.png").evaluate(element => {
     const image = element as HTMLImageElement; return image.complete && image.naturalWidth > 0;
   })).toBe(true);
+  // Real Tesseract run: wait for completion, then quality, extracted lines and their page boxes.
+  await expect(page.getByText(/^(اكتمل استخراج النص|اكتمل الاستخراج ويحتاج مراجعة بشرية)$/)).toBeVisible({ timeout: 180_000 });
+  await expect(page.getByRole("heading", { name: "جودة الصفحة 1", exact: true }).or(page.getByRole("heading", { name: "جودة الصفحة ١", exact: true }))).toBeVisible();
+  await expect(page.locator(".quality-score")).toContainText("Q =");
+  await expect(page.locator(".ocr-lines li").first()).toBeVisible();
+  expect(await page.locator(".ocr-box").count()).toBe(await page.locator(".ocr-lines li").count());
+  await page.locator(".ocr-lines button").first().hover();
+  await expect(page.locator(".ocr-box.focused")).toHaveCount(1);
   await page.screenshot({ path: info.outputPath("document-detail.png"), fullPage: true });
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("link", { name: "تنزيل الأصل", exact: true }).click();
@@ -34,6 +71,7 @@ test("real Arabic image: upload, persist, preview, download, search and mobile l
   expect(hash(await fs.readFile(target))).toBe(hash(source));
   await page.getByRole("button", { name: "تحديث السجل", exact: true }).click();
   await expect(page.getByText("طلب تنزيل الأصل", { exact: true })).toBeVisible();
+  await expect(page.getByText("اكتمال استخراج النص", { exact: true })).toBeVisible();
   await page.locator("nav").getByRole("link", { name: "المستندات", exact: true }).click();
   await page.getByRole("textbox", { name: "اسم المستند", exact: true }).fill("نص عربي");
   await page.getByRole("button", { name: "بحث", exact: true }).click();
@@ -67,6 +105,7 @@ test("real Arabic image: upload, persist, preview, download, search and mobile l
 });
 
 test("API failure shows an error rather than fabricated statistics", async ({ page }) => {
+  await signIn(page);
   await page.route("**/api/statistics", route => route.abort());
   await page.goto("/");
   await expect(page.getByRole("alert").filter({ hasText: "تعذر الاتصال بالخدمة" })).toBeVisible();
@@ -74,6 +113,7 @@ test("API failure shows an error rather than fabricated statistics", async ({ pa
 });
 
 test("unsupported upload is rejected before sending it", async ({ page }) => {
+  await signIn(page);
   await page.goto("/upload");
   await page.locator("#document-file").setInputFiles({ name: "invalid.html", mimeType: "text/html", buffer: Buffer.from("<html></html>") });
   await expect(page.getByRole("alert").filter({ hasText: "اختر ملف PDF" })).toBeVisible();
@@ -83,6 +123,7 @@ test("unsupported upload is rejected before sending it", async ({ page }) => {
 test("PDF upload exposes its unchanged original and browser preview", async ({ page }, info) => {
   const python = process.env.SMARTARCHIVE_TEST_PYTHON || path.resolve(__dirname, "../../.venv/Scripts/python.exe");
   const source = execFileSync(python, ["-c", "import pymupdf,sys; d=pymupdf.open(); p=d.new_page(); p.insert_text((72,72),'SmartArchive-X PDF test'); sys.stdout.buffer.write(d.tobytes()); d.close()"]);
+  await signIn(page);
   await page.goto("/upload");
   await page.locator("#document-file").setInputFiles({ name: "synthetic-preview.pdf", mimeType: "application/pdf", buffer: source });
   await page.getByRole("button", { name: "رفع وحفظ المستند", exact: true }).click();

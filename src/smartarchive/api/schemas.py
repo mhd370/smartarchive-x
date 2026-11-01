@@ -28,3 +28,23 @@ class Statistics(BaseModel):
     total_documents: int
     total_bytes: int
     by_status: dict[ProcessingStatus, int]
+
+
+class Credentials(BaseModel):
+    username: str
+    password: str
+
+
+class SetupRequest(Credentials):
+    display_name: str
+
+
+class UserCreate(SetupRequest):
+    role: str
+
+
+class UserUpdate(BaseModel):
+    role: str | None = None
+    active: bool | None = None
+    display_name: str | None = None
+    password: str | None = None

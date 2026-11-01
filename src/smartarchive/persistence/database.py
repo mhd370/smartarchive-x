@@ -1,4 +1,7 @@
-"""SQLite repositories with transactional upload/audit and append-only events."""
+"""SQLite repositories with transactional upload/audit and append-only events.
+
+Schema changes are versioned with PRAGMA user_version; migrations only add tables.
+"""
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
@@ -53,23 +56,32 @@ class Database:
                     BEFORE UPDATE OF filename,size_bytes,mime_type,sha256,storage_key,page_count,created_at ON documents
                     BEGIN SELECT RAISE(ABORT,'original metadata is immutable'); END;
             ''')
+            version = db.execute('PRAGMA user_version').fetchone()[0]
+            for target, script in MIGRATIONS:
+                if version < target:
+                    db.executescript(script)
+                    db.execute(f'PRAGMA user_version={target}')
 
-    def insert(self, record: dict):
+    def insert(self, record: dict, actor: str = 'local'):
         with self.connect() as db:
             keys = list(record)
             db.execute(f"INSERT INTO documents ({','.join(keys)}) VALUES ({','.join('?' for _ in keys)})",
                        list(record.values()))
             self._event(db, record['id'], 'document.uploaded', {'sha256': record['sha256'],
-                                                               'size_bytes': record['size_bytes']})
+                                                               'size_bytes': record['size_bytes']}, actor)
 
     @staticmethod
-    def _event(db, document_id: str, action: str, details: dict):
+    def _event(db, document_id: str, action: str, details: dict, actor: str = 'local'):
         db.execute('INSERT INTO audit_events(document_id,action,actor,timestamp,details) VALUES (?,?,?,?,?)',
-                   (document_id, action, 'local', now(), json.dumps(details, ensure_ascii=False)))
+                   (document_id, action, actor, now(), json.dumps(details, ensure_ascii=False)))
 
-    def event(self, document_id: str, action: str, details: dict | None = None):
+    def event(self, document_id: str, action: str, details: dict | None = None, actor: str = 'local'):
         with self.connect() as db:
-            self._event(db, document_id, action, details or {})
+            self._event(db, document_id, action, details or {}, actor)
+
+    def set_status(self, db, document_id: str, status: str, reason: str):
+        db.execute('UPDATE documents SET status=?,status_reason=?,updated_at=? WHERE id=?',
+                   (status, reason, now(), document_id))
 
     def get(self, document_id: str) -> dict | None:
         with self.connect() as db:
@@ -107,3 +119,50 @@ class Database:
             rows = db.execute('SELECT * FROM audit_events WHERE document_id=? ORDER BY sequence',
                               (document_id,)).fetchall()
             return [{**dict(row), 'details': json.loads(row['details'])} for row in rows]
+
+
+MIGRATIONS = [(2, '''
+    CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, display_name TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('admin','archivist','reviewer','viewer')),
+        password_hash TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+        failed_logins INTEGER NOT NULL DEFAULT 0, locked_until TEXT,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+        token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL, expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+    CREATE TABLE IF NOT EXISTS security_events (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT NOT NULL, action TEXT NOT NULL,
+        subject TEXT NOT NULL, timestamp TEXT NOT NULL, details TEXT NOT NULL
+    );
+    CREATE TRIGGER IF NOT EXISTS security_no_update BEFORE UPDATE ON security_events
+        BEGIN SELECT RAISE(ABORT,'security events are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS security_no_delete BEFORE DELETE ON security_events
+        BEGIN SELECT RAISE(ABORT,'security events are append-only'); END;
+    CREATE TABLE IF NOT EXISTS ocr_runs (
+        id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
+        status TEXT NOT NULL CHECK(status IN ('queued','processing','ready','failed')),
+        engine TEXT NOT NULL, engine_version TEXT, languages TEXT NOT NULL, params TEXT NOT NULL,
+        created_by TEXT NOT NULL, created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
+        error TEXT, pages_total INTEGER NOT NULL, pages_done INTEGER NOT NULL DEFAULT 0,
+        mean_confidence REAL, review_required INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS ocr_runs_document ON ocr_runs(document_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS ocr_runs_status ON ocr_runs(status, created_at);
+    CREATE TABLE IF NOT EXISTS page_analyses (
+        run_id TEXT NOT NULL REFERENCES ocr_runs(id), page_no INTEGER NOT NULL,
+        width INTEGER NOT NULL, height INTEGER NOT NULL, dpi REAL, dpi_source TEXT NOT NULL,
+        metrics TEXT NOT NULL, quality_score REAL NOT NULL, suggested_route TEXT NOT NULL,
+        blank INTEGER NOT NULL, preprocessing TEXT NOT NULL, mean_confidence REAL,
+        review_required INTEGER NOT NULL, text_length INTEGER NOT NULL,
+        PRIMARY KEY(run_id, page_no)
+    );
+    CREATE TABLE IF NOT EXISTS ocr_lines (
+        run_id TEXT NOT NULL REFERENCES ocr_runs(id), page_no INTEGER NOT NULL, line_no INTEGER NOT NULL,
+        text TEXT NOT NULL, confidence REAL, x0 REAL NOT NULL, y0 REAL NOT NULL, x1 REAL NOT NULL,
+        y1 REAL NOT NULL, words TEXT NOT NULL, PRIMARY KEY(run_id, page_no, line_no)
+    );
+''')]
