@@ -8,6 +8,7 @@ import { useApi } from "@/lib/use-api";
 import { actors, bytes, date, decimal, number, percent, reasons } from "@/lib/format";
 import { Icon } from "@/components/icons";
 import { Failure, FileSymbol, Loading, StatusBadge } from "@/components/ui";
+import { PageReview } from "@/components/page-review";
 
 const actions: Record<string, string> = {
   "document.uploaded": "رفع المستند وحفظ الأصل",
@@ -19,6 +20,7 @@ const actions: Record<string, string> = {
   "ocr.completed": "اكتمال استخراج النص",
   "ocr.failed": "فشل المعالجة",
   "ocr.requeued": "إعادة المعالجة إلى قائمة الانتظار",
+  "page.reviewed": "تصحيح نص صفحة ومراجعتها",
 };
 const routes = { fast: "سريع (صفحة نظيفة)", layout: "واعٍ بالتخطيط", advanced: "متقدم (صفحة صعبة)" };
 const layouts = { simple: "عمود واحد", multi_column: "متعدد الأعمدة", tabular: "يحتوي جدولًا" };
@@ -47,8 +49,13 @@ export default function Detail({ id }: { id: string }) {
   const analysis: PageAnalysis | undefined = summary.data?.pages.find(item => item.page_no === page);
 
   useEffect(() => {
-    setPage(1); setPreviewError(false); setPreviewLoading(true);
+    // Search results link to a specific page with ?page=n; out-of-range values are clamped below.
+    const requested = Number(new URLSearchParams(window.location.search).get("page"));
+    setPage(Number.isInteger(requested) && requested >= 1 ? requested : 1);
+    setPreviewError(false); setPreviewLoading(true);
   }, [id]);
+  const pageCount = resource.data?.page_count;
+  useEffect(() => { if (pageCount && page > pageCount) setPage(pageCount); }, [page, pageCount]);
   useEffect(() => { setFocused(undefined); }, [page, readyRun?.id]);
 
   function changePage(value: number) {
@@ -140,7 +147,9 @@ export default function Detail({ id }: { id: string }) {
                 <div><dt>متوسط ثقة OCR</dt><dd><span className={`confidence tone-${tone(readyRun.mean_confidence)}`}>{percent(readyRun.mean_confidence)}</span></dd></div>
                 <div><dt>المحرك</dt><dd dir="ltr">{readyRun.engine} {readyRun.engine_version} · {readyRun.languages}</dd></div>
                 <div><dt>نُفّذت بطلب</dt><dd dir="auto">{actors(readyRun.created_by)} · {readyRun.finished_at ? date(readyRun.finished_at) : "—"}</dd></div>
-                {readyRun.review_required && <div className="review-flag"><Icon name="alert" />تحتوي صفحات بثقة منخفضة أو بلا نص؛ تُحال للمراجعة البشرية.</div>}
+                {readyRun.review_required && (processing.data!.pending_review_pages > 0
+                  ? <div className="review-flag"><Icon name="alert" />{number(processing.data!.pending_review_pages)} صفحة بثقة منخفضة أو بلا نص بانتظار المراجعة البشرية.</div>
+                  : <div className="saved-note"><Icon name="check" />روجعت جميع الصفحات المشكوك فيها.</div>)}
               </dl>}
             </>}
         </section>
@@ -182,6 +191,8 @@ export default function Detail({ id }: { id: string }) {
             </button></li>)}</ol>}
     </section>}
 
+    {readyRun && <PageReview documentId={id} page={page} onSaved={() => { processing.reload(); audit.reload(); }} />}
+
     {summary.data && summary.data.runs.length > 0 && <section className="panel runs-panel">
       <div className="section-heading"><div><h2>نسخ المعالجة</h2><p>كل تشغيل يُحفظ كنسخة مستقلة ولا يستبدل ما قبله.</p></div></div>
       <div className="table-scroll"><table><thead><tr><th>التاريخ</th><th>الحالة</th><th>المحرك</th><th>الثقة</th><th>بطلب من</th></tr></thead><tbody>
@@ -201,7 +212,7 @@ export default function Detail({ id }: { id: string }) {
       </div>
       {audit.loading ? <Loading /> : audit.error ? <Failure message={audit.error} retry={audit.reload} /> :
         <ol className="audit-list">{audit.data?.items.map(event => <li key={event.sequence}>
-          <span className="audit-marker"><Icon name={event.action === "document.uploaded" ? "upload" : event.action.startsWith("ocr.") ? "scan" : "clock"} /></span>
+          <span className="audit-marker"><Icon name={event.action === "document.uploaded" ? "upload" : event.action.startsWith("ocr.") ? "scan" : event.action === "page.reviewed" ? "edit" : "clock"} /></span>
           <div><strong>{actions[event.action] || event.action}</strong>
             <small dir="auto">{actors(event.actor)}</small></div>
           <time dateTime={event.timestamp}>{date(event.timestamp)}</time>

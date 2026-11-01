@@ -165,4 +165,23 @@ MIGRATIONS = [(2, '''
         text TEXT NOT NULL, confidence REAL, x0 REAL NOT NULL, y0 REAL NOT NULL, x1 REAL NOT NULL,
         y1 REAL NOT NULL, words TEXT NOT NULL, PRIMARY KEY(run_id, page_no, line_no)
     );
+'''),
+    # Sprint 2: human page revisions (append-only) and the derived, searchable page text.
+    (3, '''
+    CREATE TABLE IF NOT EXISTS page_revisions (
+        id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id), page_no INTEGER NOT NULL,
+        version INTEGER NOT NULL CHECK(version>0), base_source TEXT NOT NULL CHECK(base_source IN ('ocr','review')),
+        base_run_id TEXT REFERENCES ocr_runs(id), text TEXT NOT NULL, note TEXT NOT NULL,
+        author TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(document_id, page_no, version)
+    );
+    CREATE TRIGGER IF NOT EXISTS revisions_no_update BEFORE UPDATE ON page_revisions
+        BEGIN SELECT RAISE(ABORT,'page revisions are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS revisions_no_delete BEFORE DELETE ON page_revisions
+        BEGIN SELECT RAISE(ABORT,'page revisions are append-only'); END;
+    CREATE TABLE IF NOT EXISTS page_texts (
+        document_id TEXT NOT NULL REFERENCES documents(id), page_no INTEGER NOT NULL,
+        source TEXT NOT NULL CHECK(source IN ('ocr','review')), run_id TEXT REFERENCES ocr_runs(id),
+        revision INTEGER, text TEXT NOT NULL, normalized TEXT NOT NULL, updated_at TEXT NOT NULL,
+        PRIMARY KEY(document_id, page_no)
+    );
 ''')]

@@ -6,7 +6,8 @@ export type DocumentRecord = {
   page_count: number; status: Status; status_reason: string; created_at: string; updated_at: string;
 };
 export type DocumentList = { items: DocumentRecord[]; total: number; limit: number; offset: number };
-export type Statistics = { total_documents: number; total_bytes: number; by_status: Record<Status, number> };
+export type Statistics = { total_documents: number; total_bytes: number; by_status: Record<Status, number>;
+  pages_pending_review: number; pages_reviewed: number };
 export type Health = { status: string; ocr_configured: boolean; ocr_engine: string | null; ocr_languages: string | null;
   max_upload_bytes: number; supported_extensions: string[] };
 export type OcrRun = { id: string; document_id: string; status: "queued" | "processing" | "ready" | "failed";
@@ -15,7 +16,7 @@ export type OcrRun = { id: string; document_id: string; status: "queued" | "proc
   pages_total: number; pages_done: number; mean_confidence: number | null; review_required: boolean | null };
 export type Processing = { document_id: string; status: Status; reason: string; updated_at: string; ocr_configured: boolean;
   latest_run: OcrRun | null; extracted_text: string | null; ocr_confidence: number | null;
-  review_required: boolean | null; classification: string | null };
+  review_required: boolean | null; pending_review_pages: number; classification: string | null };
 export type QualityMetrics = { score: number; route: "fast" | "layout" | "advanced"; blank: boolean; skew_angle: number;
   columns: number; has_table: boolean; layout: "simple" | "multi_column" | "tabular"; sharpness: number; contrast: number;
   resolution: number; skew: number; layout_simplicity: number; noise: number; weights: number[] };
@@ -34,6 +35,23 @@ export type AuditEvent = { sequence: number; action: string; actor: string; time
 export type User = { id: string; username: string; display_name: string; role: Role; active: boolean;
   created_at: string; permissions: Permission[] };
 export type AuthStatus = { setup_required: boolean; authenticated: boolean };
+export type TextSource = "ocr" | "review";
+export type SnippetPart = { text: string; match: boolean };
+export type SearchPage = { page_no: number; source: TextSource; revision: number | null; match_count: number;
+  snippets: SnippetPart[][] };
+export type SearchItem = { document: DocumentRecord; score: number; filename_match: boolean; matched_pages: number;
+  pages: SearchPage[] };
+export type SearchResult = { query: string; terms: string[]; items: SearchItem[]; total: number; limit: number;
+  offset: number; truncated: boolean };
+export type Revision = { id: string; version: number; base_source: TextSource; base_run_id: string | null; note: string;
+  author: string; created_at: string; characters: number };
+export type RevisionText = Revision & { text: string; document_id: string; page_no: number };
+export type PageText = { document_id: string; page_no: number; available: boolean; source: TextSource | null;
+  text: string | null; run_id: string | null; version: number; reviewed: boolean; ocr_confidence: number | null;
+  review_required: boolean | null; blank: boolean | null; revisions: Revision[] };
+export type ReviewItem = { document_id: string; filename: string; page_count: number; page_no: number;
+  mean_confidence: number | null; quality_score: number; text_length: number; run_id: string; finished_at: string };
+export type ReviewQueue = { items: ReviewItem[]; total: number; reviewed_pages: number; limit: number; offset: number };
 
 // Empty = same origin (Next forwards /api to FastAPI); set NEXT_PUBLIC_API_URL only to call the API directly.
 const base = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");

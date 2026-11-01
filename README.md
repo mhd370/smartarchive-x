@@ -1,6 +1,6 @@
 # SmartArchive-X
 
-Intelligent Arabic institutional document archiving graduation project. **Current status (v0.6.0, Sprint 1): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+Intelligent Arabic institutional document archiving graduation project. **Current status (v0.7.0, Sprint 2): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, Arabic full-text search over extracted and corrected page text, and versioned human review of low-confidence pages, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
 
 ## Run the web application
 
@@ -25,7 +25,7 @@ Node.js LTS is required; the helper also detects the local portable runtime unde
 
 Open **http://127.0.0.1:3000**. Upload an authorized PDF/image, find it in Documents, preview/download its unchanged original and refresh the dashboard to see persisted counts. Metadata/audit live in `storage/archive.sqlite3`; originals live in `storage/originals/`. No fake documents or statistics are seeded.
 
-Uploads are stored and validated; **OCR/classification are not connected**, so extraction/confidence results remain unavailable. This is a loopback-only prototype without authentication, not a public institutional deployment. See [startup/configuration/API documentation](docs/web_application.md) and [Task 005 validation](docs/task_005_validation.md).
+Uploads are validated, stored unchanged and processed by Tesseract (when installed). **Search** (`/search` or the top bar) finds words in page text and file names, ignoring hamza forms, taa marbuta, alef maqsura, diacritics, tatweel and Arabic-Indic digits. **Review** (`/review`) lists low-confidence pages; reviewers correct a page's text, each save is a new numbered version with its author, and the corrected text becomes what search uses. Classification is not connected yet. This is a loopback-only prototype, not a public institutional deployment. See [startup/configuration/API documentation](docs/web_application.md) and [Task 005 validation](docs/task_005_validation.md).
 
 ## Research scope
 
@@ -130,4 +130,4 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 ## Next engineering task
 
-Task 006 should connect a versioned, bounded OCR processing job and human-review state to the stored-document lifecycle, while completing approved GT for objective evaluation. Preserve full-page baseline/fallback and traceability; do not invent confidence or claim improvements without evidence. Institutional deployment also requires authentication/access control and backup/recovery.
+Sprint 3: document classification with abstention and reviewer approval of (re)classification, then backup/restore. Human-corrected pages from Sprint 2 also serve as reference text for measuring OCR accuracy (CER/WER) with the existing evaluation tools. Do not claim accuracy improvements without that evidence.

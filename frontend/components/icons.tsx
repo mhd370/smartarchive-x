@@ -22,6 +22,9 @@ const paths = {
   alert: "M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0",
   play: "m7 4 13 8-13 8z",
   lock: "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+  review: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
+  text: "M4 6h16M4 12h16M4 18h10",
 } as const;
 export type IconName = keyof typeof paths;
 export function Icon({ name, className = "", style }: { name: IconName; className?: string; style?: CSSProperties }) {

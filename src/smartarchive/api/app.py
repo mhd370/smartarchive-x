@@ -12,10 +12,12 @@ from smartarchive.domain.documents import ArchiveError, ProcessingStatus
 from smartarchive.persistence.database import Database
 from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
+from smartarchive.search.pages import PageTexts
 from smartarchive.services.auth import Accounts, can
 from smartarchive.services.documents import Documents, public_record
 from .middleware import UploadLimitMiddleware
-from .schemas import Credentials, Document, DocumentList, SetupRequest, Statistics, UserCreate, UserUpdate
+from .schemas import (Credentials, Document, DocumentList, PageRevision, SetupRequest, Statistics, UserCreate,
+                      UserUpdate)
 
 COOKIE = 'sa_session'
 
@@ -26,20 +28,23 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     originals = OriginalStore(settings)
     documents = Documents(db, originals)
     accounts = Accounts(db, settings.session_hours)
-    ocr = OcrService(db, originals, settings, engine_factory)
+    texts = PageTexts(db)
+    ocr = OcrService(db, originals, settings, engine_factory, texts)
     worker = Worker(ocr)
 
     @asynccontextmanager
     async def lifespan(app):
         originals.initialize()
         db.initialize()
+        texts.ensure_indexed()
         if settings.ocr_worker:
             worker.start()
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.6.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.7.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
+    api.state.texts = texts
     api.add_middleware(UploadLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024,
                        allowed_origins=settings.allowed_origins)
     api.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_credentials=True,
@@ -68,6 +73,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     Uploader = Annotated[dict, Depends(require('documents.upload'))]
     Operator = Annotated[dict, Depends(require('ocr.run'))]
     Admin = Annotated[dict, Depends(require('users.manage'))]
+    Reviewer = Annotated[dict, Depends(require('review.write'))]
 
     def start_session(response: Response, token: str):
         response.set_cookie(COOKIE, token, httponly=True, samesite='lax', secure=settings.secure_cookies,
@@ -126,7 +132,8 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
 
     @api.get('/api/statistics', response_model=Statistics)
     def statistics(user: Reader):
-        return db.statistics()
+        queue = texts.queue(1, 0)
+        return {**db.statistics(), 'pages_pending_review': queue['total'], 'pages_reviewed': queue['reviewed_pages']}
 
     @api.post('/api/documents', response_model=Document, status_code=201)
     def upload(file: Annotated[UploadFile, File()], user: Uploader):
@@ -167,6 +174,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
                 'updated_at': record['updated_at'], 'ocr_configured': ocr.info()['configured'],
                 'latest_run': runs[0] if runs else None,
                 'extracted_text': ocr.text(ready['id']) if ready else None,
+                'pending_review_pages': texts.pending(record['id']),
                 'ocr_confidence': ready['mean_confidence'] if ready else None,
                 'review_required': ready['review_required'] if ready else None,
                 'classification': None}
@@ -193,6 +201,30 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
             raise ArchiveError('ocr_not_found', 'لا توجد نتائج OCR لهذه الصفحة بعد.', 404)
         analysis = next((item for item in ocr.pages(run['id']) if item['page_no'] == page), None)
         return {'run_id': run['id'], 'page': page, 'analysis': analysis, 'lines': ocr.lines(run['id'], page)}
+
+    # -- search and review (Sprint 2) ------------------------------------------------------------
+    @api.get('/api/search')
+    def search(user: Reader, q: str = Query(..., min_length=1, max_length=200),
+               limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0, le=100_000)):
+        return texts.search(q, limit, offset)
+
+    @api.get('/api/review/queue')
+    def review_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):
+        return texts.queue(limit, offset)
+
+    @api.get('/api/documents/{document_id}/pages/{page}/text')
+    def page_text(document_id: UUID, page: int, user: Reader):
+        return texts.page(documents.get(str(document_id)), page)
+
+    @api.get('/api/documents/{document_id}/pages/{page}/revisions/{version}')
+    def page_revision(document_id: UUID, page: int, version: int, user: Reader):
+        record = documents.get(str(document_id))
+        return texts.revision_text(record['id'], page, version)
+
+    @api.post('/api/documents/{document_id}/pages/{page}/text')
+    def revise_page(document_id: UUID, page: int, body: PageRevision, user: Reviewer):
+        record = documents.get(str(document_id))
+        return texts.revise(record, page, body.text, body.expected_version, body.note, user['username'])
 
     @api.get('/api/documents/{document_id}/audit')
     def audit(document_id: UUID, user: Reader):

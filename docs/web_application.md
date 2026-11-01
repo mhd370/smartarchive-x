@@ -1,4 +1,6 @@
-# Local full-stack application (Task 005, extended in Task 006)
+# Local full-stack application (Task 005, extended in Tasks 006 and 007)
+
+Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md).
 
 Task 006 added sign-in, roles and the OCR pipeline; every endpoint except `/api/health` and `/api/auth/*` now requires a session. Roles: admin (everything), archivist (upload, run OCR), reviewer (read, review in later tasks), viewer (read/download).
 
@@ -90,6 +92,11 @@ Root `.env.example` documents backend variables; they are read from the environm
 | GET `/api/documents/{uuid}/ocr` | Engine info, all runs (versions) and per-page quality analysis of the shown run |
 | POST `/api/documents/{uuid}/ocr` | Archivist/admin: queue a new run (409 while one is queued/running, 503 without an engine) |
 | GET `/api/documents/{uuid}/ocr/pages/{n}` | Lines with normalised boxes (0..1 of the page), word boxes and engine confidences; `run_id` selects an older version |
+| GET `/api/search` *(007)* | `q` (1–200 chars), `limit` 1–50, `offset`: documents whose page text contains every term, or whose file name does; pages with highlighted excerpts and whether the text is OCR or reviewed |
+| GET `/api/review/queue` *(007)* | Reviewer/archivist/admin: pages of the latest completed run flagged for review and not yet corrected, lowest confidence first |
+| GET `/api/documents/{uuid}/pages/{n}/text` *(007)* | Approved page text (latest revision, else OCR), its source, current version and revision history |
+| POST `/api/documents/{uuid}/pages/{n}/text` *(007)* | Reviewer/archivist/admin: `{text, expected_version, note}` saves a new revision; 409 if someone saved first or the document is being processed |
+| GET `/api/documents/{uuid}/pages/{n}/revisions/{v}` *(007)* | Full text of an earlier revision |
 | GET `/api/documents/{uuid}/audit` | Ordered append-only event history |
 | GET `/api/documents/{uuid}/download` | Integrity-checked unchanged original as attachment |
 | GET `/api/documents/{uuid}/content` | Integrity-checked original inline; supports PDF byte ranges |

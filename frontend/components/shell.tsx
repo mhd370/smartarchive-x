@@ -12,10 +12,13 @@ import { Loading } from "./ui";
 const navigation: { href: string; label: string; icon: IconName; permission: Permission }[] = [
   { href: "/", label: "لوحة التحكم", icon: "dashboard", permission: "documents.read" },
   { href: "/documents", label: "المستندات", icon: "folder", permission: "documents.read" },
+  { href: "/search", label: "البحث في النصوص", icon: "search", permission: "documents.read" },
+  { href: "/review", label: "المراجعة", icon: "review", permission: "review.write" },
   { href: "/upload", label: "رفع مستند", icon: "upload", permission: "documents.upload" },
   { href: "/users", label: "المستخدمون", icon: "users", permission: "users.manage" },
 ];
-const titles: Record<string, string> = { "/": "نظرة عامة", "/upload": "رفع مستند", "/documents": "المستندات", "/users": "المستخدمون" };
+const titles: Record<string, string> = { "/": "نظرة عامة", "/upload": "رفع مستند", "/documents": "المستندات", "/users": "المستخدمون",
+  "/search": "البحث في النصوص", "/review": "المراجعة" };
 
 export function Shell({ children }: { children: ReactNode }) {
   return <AuthProvider><Frame>{children}</Frame></AuthProvider>;
@@ -28,7 +31,7 @@ function Frame({ children }: { children: ReactNode }) {
   const health = useApi<Health>("/health");
   if (PUBLIC_PATHS.includes(path)) return <main id="main-content" className="auth-page">{children}</main>;
   if (checking || !user) return <main id="main-content" className="auth-page"><Loading label="جار التحقق من الجلسة…" /></main>;
-  function submit(event: FormEvent) { event.preventDefault(); router.push(`/documents?q=${encodeURIComponent(search)}`); }
+  function submit(event: FormEvent) { event.preventDefault(); if (search.trim()) router.push(`/search?q=${encodeURIComponent(search.trim())}`); }
   const items = navigation.filter(item => can(item.permission));
   const active = (href: string) => href === "/" ? path === "/" : path.startsWith(href);
   return <div className="app-frame">
@@ -41,6 +44,6 @@ function Frame({ children }: { children: ReactNode }) {
       <div className="user-card"><span className="user-avatar"><Icon name="user" /></span><div><strong dir="auto">{user.display_name}</strong><small>{roleNames[user.role]} · <span dir="ltr">{user.username}</span></small></div><button onClick={signOut} aria-label="تسجيل الخروج" title="تسجيل الخروج"><Icon name="logout" /></button></div>
       <div className={`connection ${health.error ? "offline" : ""}`}><span className={health.data ? "connected-dot" : "pending-dot"} /><div>{health.data ? "متصل بخدمة الأرشيف" : health.error ? "الخدمة غير متاحة" : "جار التحقق من الاتصال…"}<small>{health.data ? (health.data.ocr_configured ? `OCR: ${health.data.ocr_engine} · ${health.data.ocr_languages}` : "OCR غير مهيأ على الخادم") : "تحقق من تشغيل خادم API"}</small></div>{health.error && <button onClick={health.reload} aria-label="إعادة فحص الاتصال"><Icon name="refresh" /></button>}</div>
     </aside>
-    <div className="main-column"><header className="topbar"><div className="topbar-title"><button className="mobile-menu icon-link" aria-label="فتح القائمة" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="menu" /></button><span>مساحة الأرشيف <span className="breadcrumb-slash">/</span> <strong>{titles[path] || "تفاصيل المستند"}</strong></span></div><form role="search" className="global-search" onSubmit={submit}><Icon name="search" /><input aria-label="بحث في أسماء المستندات" placeholder="ابحث عن مستند…" value={search} onChange={e => setSearch(e.target.value)} /></form>{can("documents.upload") && <Link className="button primary compact" href="/upload"><Icon name="upload" /><span>رفع مستند</span></Link>}</header><main id="main-content" className="page-content">{children}</main><footer className="app-footer"><span dir="ltr">SmartArchive-X</span><span>أرشفة عربية · أصول محفوظة · نتائج قابلة للتتبّع</span></footer></div>
+    <div className="main-column"><header className="topbar"><div className="topbar-title"><button className="mobile-menu icon-link" aria-label="فتح القائمة" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="menu" /></button><span>مساحة الأرشيف <span className="breadcrumb-slash">/</span> <strong>{titles[path] || "تفاصيل المستند"}</strong></span></div><form role="search" className="global-search" onSubmit={submit}><Icon name="search" /><input aria-label="بحث في نصوص المستندات وأسمائها" placeholder="ابحث في نصوص المستندات…" value={search} onChange={e => setSearch(e.target.value)} /></form>{can("documents.upload") && <Link className="button primary compact" href="/upload"><Icon name="upload" /><span>رفع مستند</span></Link>}</header><main id="main-content" className="page-content">{children}</main><footer className="app-footer"><span dir="ltr">SmartArchive-X</span><span>أرشفة عربية · أصول محفوظة · نتائج قابلة للتتبّع</span></footer></div>
   </div>;
 }

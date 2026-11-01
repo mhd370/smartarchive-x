@@ -20,7 +20,7 @@ PY = sys.executable
 def steps(full: bool) -> list[tuple[str, list[str]]]:
     plan = [('python-tests', [PY, '-m', 'unittest', 'discover', '-s', 'tests']),
             ('preservation-108', [PY, 'tools/verify_preservation.py'])]
-    for task in ('003', '004', '005', '006'):
+    for task in ('003', '004', '005', '006', '007'):
         manifest = ROOT / 'docs' / f'task_{task}_preservation.json'
         if manifest.is_file():
             plan.append((f'snapshot-{task}', [PY, 'tools/verify_snapshot.py', '--manifest', f'docs/task_{task}_preservation.json']))
