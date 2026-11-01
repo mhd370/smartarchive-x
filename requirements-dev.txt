@@ -1,5 +1,2 @@
 -r requirements-api.txt
 httpx==0.28.1
-# Existing experimental imports used by the preserved full test suite.
-numpy==2.4.6
-opencv-python==4.14.0.94

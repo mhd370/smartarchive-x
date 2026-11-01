@@ -4,3 +4,7 @@ PyMuPDF==1.28.2
 fastapi==0.162.0
 uvicorn==0.54.0
 python-multipart==0.0.32
+# Task 006 processing: page quality, preprocessing and the Tesseract adapter.
+numpy==2.4.6
+opencv-python==4.14.0.94
+pytesseract==0.3.13

@@ -1,4 +1,6 @@
-# Task 005 — local full-stack application
+# Local full-stack application (Task 005, extended in Task 006)
+
+Task 006 added sign-in, roles and the OCR pipeline; every endpoint except `/api/health` and `/api/auth/*` now requires a session. Roles: admin (everything), archivist (upload, run OCR), reviewer (read, review in later tasks), viewer (read/download).
 
 This application implements ingestion, persistent document records, original preview/download, filename search, dashboard counts and append-only document audit. It uses FastAPI/Python 3.11, SQLite and local files, with Next.js/TypeScript/Tailwind for an Arabic-first RTL interface. Existing experiments, GT approval tools, historical adapters and metric policies remain independent and unchanged.
 
@@ -62,6 +64,11 @@ The scripts use the supported Webpack builder on Windows. Initial optional SWC c
 | `SMARTARCHIVE_CORS_ORIGINS` | localhost/127.0.0.1:3000 | Explicit browser origins; wildcard rejected |
 | `NEXT_PUBLIC_API_URL` | http://127.0.0.1:8000 | Browser API origin, without `/api` suffix |
 | `SMARTARCHIVE_NEXT_DIR` | .next | Optional separate Next build directory, used by browser tests |
+| `SMARTARCHIVE_TESSERACT_CMD` | auto (`PATH`, then `C:\Program Files\Tesseract-OCR\tesseract.exe`) | Tesseract executable (Task 006) |
+| `SMARTARCHIVE_OCR_LANGUAGES` | `ara+eng` | Requested languages; only installed ones are used and the actual set is recorded per run |
+| `SMARTARCHIVE_OCR_AUTO` | true | Queue OCR automatically after each upload |
+| `SMARTARCHIVE_OCR_WORKER` | true | Run the background OCR worker inside the API process |
+| `SMARTARCHIVE_SECURE_COOKIES` | false | Set true only when served over HTTPS |
 
 Root `.env.example` documents backend variables; they are read from the environment, not automatically loaded from `.env`. `frontend/.env.example` can be copied to `.env.local` for Next, or set variables in the PowerShell session as above. Never store credentials in public frontend variables.
 
@@ -69,12 +76,20 @@ Root `.env.example` documents backend variables; they are read from the environm
 
 | Method/path | Behavior |
 | --- | --- |
-| GET `/api/health` | Database availability, actual upload limits/types, OCR configured=false |
+| GET `/api/auth/status` | Public: `setup_required` (no users yet) and whether the caller is signed in |
+| POST `/api/auth/setup` | Public, only while no user exists: create the first admin and sign in |
+| POST `/api/auth/login` / `/api/auth/logout` | Start/end a server session (HttpOnly `sa_session` cookie); 5 failures lock the account for 15 min |
+| GET `/api/auth/me` | Current user, role and permissions |
+| GET/POST `/api/users`, PATCH `/api/users/{uuid}` | Admin only: list, create, change role/active/name/password; changes revoke the user's sessions; the last active admin is protected |
+| GET `/api/health` | Public: database availability, upload limits/types, actual OCR engine and installed languages |
 | GET `/api/statistics` | Persisted counts by lifecycle state and total original bytes |
 | POST `/api/documents` | Multipart `file`; validate, preserve, insert record and upload audit transaction; 201 |
 | GET `/api/documents` | `q` literal filename search; `status`, `kind=pdf/image`, `limit=1..100`, `offset` |
 | GET `/api/documents/{uuid}` | Metadata; append viewed event |
-| GET `/api/documents/{uuid}/status` | Persisted state/reason; extraction/confidence/classification unavailable |
+| GET `/api/documents/{uuid}/status` | Persisted state/reason, latest run, extracted text and mean confidence of the latest completed run; classification still null |
+| GET `/api/documents/{uuid}/ocr` | Engine info, all runs (versions) and per-page quality analysis of the shown run |
+| POST `/api/documents/{uuid}/ocr` | Archivist/admin: queue a new run (409 while one is queued/running, 503 without an engine) |
+| GET `/api/documents/{uuid}/ocr/pages/{n}` | Lines with normalised boxes (0..1 of the page), word boxes and engine confidences; `run_id` selects an older version |
 | GET `/api/documents/{uuid}/audit` | Ordered append-only event history |
 | GET `/api/documents/{uuid}/download` | Integrity-checked unchanged original as attachment |
 | GET `/api/documents/{uuid}/content` | Integrity-checked original inline; supports PDF byte ranges |

@@ -15,6 +15,13 @@ const paths = {
   folder: "M3 7V4h6l2 3h10v13H3z",
   refresh: "M20 7a9 9 0 1 0 1 8M20 2v6h-6",
   image: "M3 3h18v18H3zM3 17l6-6 5 5 3-3 4 4M17 7h.01",
+  user: "M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10",
+  users: "M16 21a6 6 0 0 0-12 0M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21a5 5 0 0 0-4-4.9M15 3.1a4 4 0 0 1 0 7.8",
+  logout: "M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l5-5-5-5M15 12H3",
+  scan: "M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 12h10",
+  alert: "M12 9v4M12 17h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0",
+  play: "m7 4 13 8-13 8z",
+  lock: "M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4",
 } as const;
 export type IconName = keyof typeof paths;
 export function Icon({ name, className = "", style }: { name: IconName; className?: string; style?: CSSProperties }) {

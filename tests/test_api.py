@@ -21,9 +21,11 @@ class APITests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.settings = Settings(storage_dir=Path(self.temp.name))
+        # OCR is exercised in test_ocr_pipeline.py; these tests cover storage and API contracts.
+        self.settings = Settings(storage_dir=Path(self.temp.name), ocr_auto=False, ocr_worker=False)
         self.app = create_app(self.settings)
         self.client = self.enterContext(TestClient(self.app))
+        self.signin(self.client)
         buffer = BytesIO()
         Image.new('RGB', (20, 30), 'white').save(buffer, format='PNG')
         self.png = buffer.getvalue()
@@ -31,6 +33,16 @@ class APITests(unittest.TestCase):
             pdf.new_page()
             pdf.new_page()
             self.pdf = pdf.tobytes()
+
+    @staticmethod
+    def signin(client):
+        if client.get('/api/auth/status').json()['setup_required']:
+            response = client.post('/api/auth/setup', json={
+                'username': 'admin', 'password': 'test-password-1', 'display_name': 'مدير الاختبار'})
+        else:
+            response = client.post('/api/auth/login', json={'username': 'admin', 'password': 'test-password-1'})
+        assert response.status_code in (200, 201), response.text
+        return client
 
     def upload(self, data=None, name='وثيقة.png', mime='image/png', client=None):
         return (client or self.client).post('/api/documents', files={
@@ -50,7 +62,7 @@ class APITests(unittest.TestCase):
         self.assertIn('attachment', download.headers['content-disposition'])
         self.assertEqual(download.headers['x-content-type-options'], 'nosniff')
         status = self.client.get(f"/api/documents/{document['id']}/status").json()
-        self.assertFalse(status['ocr_configured'])
+        self.assertIsNone(status['latest_run'])
         self.assertIsNone(status['extracted_text'])
         self.assertIsNone(status['ocr_confidence'])
 
@@ -104,6 +116,7 @@ class APITests(unittest.TestCase):
         self.upload()
         self.upload(self.pdf, 'record.pdf', 'application/pdf')
         with TestClient(create_app(self.settings)) as restarted:
+            self.signin(restarted)
             stats = restarted.get('/api/statistics').json()
             self.assertEqual(stats['total_documents'], 2)
             self.assertEqual(stats['total_bytes'], len(self.png) + len(self.pdf))
@@ -151,6 +164,7 @@ class APITests(unittest.TestCase):
 
     def test_file_and_chunked_request_limits(self):
         with TestClient(create_app(replace(self.settings, max_upload_bytes=1024))) as small:
+            self.signin(small)
             self.assertEqual(self.upload(b'x' * 2048, client=small).status_code, 413)
             body = iter([b'x' * 600_000, b'x' * 600_000])
             response = small.post('/api/documents', content=body,
@@ -159,6 +173,7 @@ class APITests(unittest.TestCase):
 
     def test_image_and_pdf_resource_limits(self):
         with TestClient(create_app(replace(self.settings, max_image_pixels=10, max_pages=1))) as bounded:
+            self.signin(bounded)
             self.assertEqual(self.upload(client=bounded).status_code, 422)
             self.assertEqual(self.upload(self.pdf, 'large.pdf', 'application/pdf', client=bounded).status_code, 422)
 
