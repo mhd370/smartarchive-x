@@ -174,6 +174,33 @@ test("a person classifies a document, and the category filters documents", async
   await expect(page.getByRole("heading", { name: "توزيع التصنيفات", exact: true })).toBeVisible();
 });
 
+test("admin backs up, verifies and checks integrity; evaluation shows measured rates", async ({ page }, info) => {
+  test.setTimeout(90_000);
+  await signIn(page);
+  await page.goto("/system");
+  await expect(page.getByRole("heading", { name: "النظام والنسخ الاحتياطي", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "إنشاء نسخة احتياطية", exact: true }).click();
+  const row = page.locator("tbody tr").first();
+  await expect(row.locator(".backup-name")).toHaveText(/^smartarchive-backup-.*\.zip$/);
+  await row.getByRole("button", { name: "تحقق", exact: true }).click();
+  await expect(row.getByText("سليمة", { exact: true })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await row.getByRole("link", { name: "تنزيل", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^smartarchive-backup-.*\.zip$/);
+  await page.getByRole("button", { name: "تشغيل الفحص", exact: true }).click();
+  await expect(page.getByText(/الأرشيف سليم/)).toBeVisible({ timeout: 30_000 });
+  await page.screenshot({ path: info.outputPath("system.png"), fullPage: true });
+
+  await page.goto("/evaluation");
+  // Metrics are computed on request from every corrected page; allow time on a slow machine.
+  await expect(page.getByRole("heading", { name: "تقييم النظام على بيانات الأرشيف", exact: true })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByTestId("micro-cer")).not.toHaveText("—");
+  // The test document was a poem: the classifier abstained, so accuracy is undefined but the label is counted.
+  await expect(page.locator(".confusion")).toContainText("امتنع");
+  await page.screenshot({ path: info.outputPath("evaluation.png"), fullPage: true });
+});
+
 test("API failure shows an error rather than fabricated statistics", async ({ page }) => {
   await signIn(page);
   await page.route("**/api/statistics", route => route.abort());

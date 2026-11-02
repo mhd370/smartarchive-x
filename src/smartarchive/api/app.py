@@ -14,6 +14,8 @@ from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
 from smartarchive.search.pages import PageTexts
 from smartarchive.classification.service import Classifications
+from smartarchive.operations import evaluation
+from smartarchive.operations.backup import Backups, integrity
 from smartarchive.services.auth import Accounts, can
 from smartarchive.services.documents import Documents, public_record
 from .middleware import UploadLimitMiddleware
@@ -32,6 +34,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db)
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.9.0')
     ocr.on_ready = classes.suggest_quietly
     worker = Worker(ocr)
 
@@ -47,7 +50,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.8.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.9.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.add_middleware(UploadLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024,
@@ -271,6 +274,32 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     def classification_decide(document_id: UUID, body: ClassificationDecision, user: Reviewer):
         record = documents.get(str(document_id))
         return classes.decide(record['id'], body.category_id, body.reason, body.expected_sequence, user['username'])
+
+    # -- operations and evaluation (Sprint 4) ----------------------------------------------------
+    @api.get('/api/admin/backups')
+    def backup_list(user: Admin):
+        return {'items': backups.list(), 'directory': str(backups.dir)}
+
+    @api.post('/api/admin/backups', status_code=201)
+    def backup_create(user: Admin):
+        return backups.create(user['username'])
+
+    @api.post('/api/admin/backups/{name}/verify')
+    def backup_verify(name: str, user: Admin):
+        return backups.verify(name, user['username'])
+
+    @api.get('/api/admin/backups/{name}/download')
+    def backup_download(name: str, user: Admin):
+        return FileResponse(backups.path(name), media_type='application/zip', filename=name,
+                            headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+
+    @api.post('/api/admin/integrity')
+    def integrity_check(user: Admin):
+        return integrity(settings.storage_dir, user['username'])
+
+    @api.get('/api/evaluation')
+    def evaluation_report(user: Reviewer):
+        return evaluation.report(db)
 
     @api.get('/api/documents/{document_id}/audit')
     def audit(document_id: UUID, user: Reader):

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.9.0 — Sprint 4 / Task 009 (unreleased)
+- Backups: one zip with an online SQLite snapshot, every referenced original and a SHA-256 manifest; refused
+  when an original is missing or damaged; verification re-hashes every member, checks database integrity and
+  that each document's original matches the database. Admin page `/system` (create, verify, download) and
+  `tools/archive_ops.py backup|verify`. `SMARTARCHIVE_BACKUP_DIR` sets the folder (default `storage/backups`).
+- Restore (`tools/archive_ops.py restore`) only into a new or empty folder, after verification, re-checking
+  every written file; the live archive is never overwritten.
+- Integrity check (`/system`, CLI): re-hashes every original against the database, reports missing or changed
+  originals, orphan folders, unfinished uploads, missing append-only triggers and unindexed documents; never
+  deletes or repairs. Backups, verifications and checks are recorded as security events.
+- Evaluation (`/evaluation`, `GET /api/evaluation`, `tools/archive_ops.py evaluate`): OCR post-editing CER/WER
+  of corrected pages against their latest revision, overall and by OCR-confidence band; classifier coverage,
+  accuracy, per-category precision/recall/F1 and confusion matrix against confirmed categories. Both state
+  their limits (post-editing is not independent ground truth; reviewers saw the suggestion).
+
 ## 0.8.0 — Sprint 3 / Task 008 (unreleased)
 - Explainable document classification (`keywords-v1`): ten default institutional categories (decision, circular,
   letter, minutes, report, contract, financial, certificate, request, personnel); whole-word Arabic keyword

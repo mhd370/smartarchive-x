@@ -25,6 +25,8 @@ const paths = {
   edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   review: "M9 11l3 3 8-8M20 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11",
   text: "M4 6h16M4 12h16M4 18h10",
+  chart: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+  database: "M4 6c0 1.7 3.6 3 8 3s8-1.3 8-3-3.6-3-8-3-8 1.3-8 3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3",
   tag: "M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9zM7.5 7.5h.01",
 } as const;
 export type IconName = keyof typeof paths;

@@ -19,6 +19,7 @@ def find_tesseract(explicit: str | None = None) -> str | None:
 @dataclass(frozen=True)
 class Settings:
     storage_dir: Path = ROOT / 'storage'
+    backup_dir: Path | None = None  # default: <storage>/backups; copy backups to another disk as well
     max_upload_bytes: int = 32 * 1024 * 1024
     max_pages: int = 200
     max_image_pixels: int = 40_000_000
@@ -50,7 +51,9 @@ class Settings:
         if not origins or '*' in origins:
             raise ValueError('Use explicit CORS origins')
         flag = lambda name, default: os.getenv(name, default).strip().lower() in ('1', 'true', 'yes')
+        backups = os.getenv('SMARTARCHIVE_BACKUP_DIR')
         return cls(storage_dir=Path(os.getenv('SMARTARCHIVE_STORAGE_DIR', str(ROOT / 'storage'))).resolve(),
+                   backup_dir=Path(backups).resolve() if backups else None,
                    max_upload_bytes=size * 1024 * 1024, allowed_origins=origins,
                    secure_cookies=flag('SMARTARCHIVE_SECURE_COOKIES', 'false'),
                    tesseract_cmd=os.getenv('SMARTARCHIVE_TESSERACT_CMD') or None,
