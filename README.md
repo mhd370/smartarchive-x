@@ -1,6 +1,6 @@
 # SmartArchive-X
 
-Intelligent Arabic institutional document archiving graduation project. **Current status (v0.8.0, Sprint 3): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, Arabic full-text search, versioned human review of low-confidence pages, and explainable document classification with human confirmation, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+Intelligent Arabic institutional document archiving graduation project. **Current status (v0.9.0, Sprint 4): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, Arabic full-text search, versioned human review of low-confidence pages, explainable document classification with human confirmation, verified backups with safe restore, an integrity check, and measured OCR/classification accuracy from the archive's own reviewed data, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
 
 ## Run the web application
 
@@ -130,4 +130,17 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 ## Next engineering task
 
-Sprint 4: backup/restore and integrity reconciliation, then evaluation: human-corrected pages serve as reference text for OCR accuracy (CER/WER), and confirmed categories as labels for measuring and later training the classifier. Do not claim accuracy without that evidence.
+## Operations and evaluation (Sprint 4)
+
+```powershell
+.\.venv\Scripts\python.exe tools/archive_ops.py backup        # verified zip in storage\backups (copy it to another disk)
+.\.venv\Scripts\python.exe tools/archive_ops.py restore storage\backups\NAME.zip D:\restored-storage
+.\.venv\Scripts\python.exe tools/archive_ops.py integrity     # report only, never deletes
+.\.venv\Scripts\python.exe tools/archive_ops.py evaluate      # JSON + CSV in results\evaluation
+```
+
+The same actions are on the admin page `/system`; measured rates are on `/evaluation`.
+
+## Next engineering task
+
+Sprint 5: collect a representative, independently transcribed test set to report OCR accuracy against true ground truth (not only post-editing), compare preprocessing routes on it, and train/evaluate a statistical classifier on confirmed categories against `keywords-v1`.

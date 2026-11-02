@@ -1,6 +1,6 @@
 # Local full-stack application (Task 005, extended in Tasks 006 and 007)
 
-Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md). Task 008 (Sprint 3) added classification, rows marked *(008)*, [ADR 0005](adr/0005-explainable-classification.md).
+Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md). Task 008 (Sprint 3) added classification, rows marked *(008)*, [ADR 0005](adr/0005-explainable-classification.md). Task 009 (Sprint 4) added operations and evaluation, rows marked *(009)*, [ADR 0006](adr/0006-backup-integrity-evaluation.md).
 
 Task 006 added sign-in, roles and the OCR pipeline; every endpoint except `/api/health` and `/api/auth/*` now requires a session. Roles: admin (everything), archivist (upload, run OCR), reviewer (read, review in later tasks), viewer (read/download).
 
@@ -103,6 +103,10 @@ Root `.env.example` documents backend variables; they are read from the environm
 | POST `/api/documents/{uuid}/classification` *(008)* | Reviewer/archivist/admin: `{category_id, expected_sequence, reason}`; reason required to change a confirmed category; 409 on stale sequence |
 | POST `/api/documents/{uuid}/classification/suggest` *(008)* | Reviewer/archivist/admin: recompute the suggestion now |
 | GET `/api/classification/queue` *(008)* | Documents with an unconfirmed suggestion or no category; `category` filter also on `/api/documents` (`none` = unclassified) and `/api/search` |
+| GET/POST `/api/admin/backups` *(009)* | Admin: list backups / create a verified backup zip |
+| POST `/api/admin/backups/{name}/verify`, GET `.../download` *(009)* | Admin: verify every member and the database / download the zip |
+| POST `/api/admin/integrity` *(009)* | Admin: reconcile originals with the database; report only |
+| GET `/api/evaluation` *(009)* | Reviewer/archivist/admin: OCR post-editing CER/WER and classification accuracy from reviewed data |
 | GET `/api/documents/{uuid}/audit` | Ordered append-only event history |
 | GET `/api/documents/{uuid}/download` | Integrity-checked unchanged original as attachment |
 | GET `/api/documents/{uuid}/content` | Integrity-checked original inline; supports PDF byte ranges |

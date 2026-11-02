@@ -22,7 +22,9 @@ APPLICATION = ('src/smartarchive/api/', 'src/smartarchive/classification/', 'src
                'src/smartarchive/search/', 'src/smartarchive/services/', 'frontend/', 'tools/check.py',
                'tests/test_api.py', 'tests/test_auth.py', 'tests/test_ocr_pipeline.py', 'tests/test_processing.py',
                'tests/test_search.py', 'tests/test_review_api.py', 'tests/test_classification.py',
-               'tests/test_classification_api.py', 'README.md', 'CHANGELOG.md', 'docs/web_application.md',
+               'tests/test_classification_api.py', 'tests/test_operations.py', 'tests/test_operations_api.py',
+               'src/smartarchive/operations/', 'tools/archive_ops.py',
+               'README.md', 'CHANGELOG.md', 'docs/web_application.md',
                'requirements-api.txt', 'requirements-dev.txt', '.gitignore', '.env.example')
 
 

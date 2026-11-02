@@ -127,3 +127,17 @@
 .confirmed-part{background:#55b394}.suggested-part{background:#cfe9de}
 .category-foot{padding:4px 24px 18px}
 @media(max-width:700px){.category-list>li{padding:15px}.category-bars{padding-inline:15px}.category-bar{grid-template-columns:110px 1fr 50px}.category-foot{padding-inline:15px}}
+
+/* Sprint 4: operations and evaluation */
+.code-inline{font-family:Consolas,monospace;font-size:11px;background:#f1f5f6;border-radius:4px;padding:1px 5px;overflow-wrap:anywhere}
+.backup-name{font-family:Consolas,monospace;font-size:11px;font-weight:600}
+.block{display:block}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap}
+.restore-help{padding:0 24px 18px}.restore-help p{margin:6px 0}.restore-help pre{background:#f6f8f8;border:1px solid var(--line);border-radius:7px;padding:10px;overflow:auto;font-size:11px}
+.integrity-report{padding:0 24px 20px}
+.problem-list{margin:10px 0 0;padding-inline-start:18px;font-size:12px}
+.heading-actions{display:flex;gap:10px;flex-wrap:wrap}
+.eval-details{padding:0 24px 16px}
+.matrix-title{font-size:13px;padding:16px 24px 6px}
+.confusion td,.confusion th{text-align:center}.confusion td.hit{background:#e6f4ee;color:#2f7a5b;font-weight:700}.confusion td.miss{background:#fcf0ef;color:#b3605a;font-weight:700}
+@media(max-width:700px){.restore-help,.integrity-report,.eval-details{padding-inline:15px}.matrix-title{padding-inline:15px}}
