@@ -158,13 +158,13 @@ test("a person classifies a document, and the category filters documents", async
   const reason = panel.getByLabel(/السبب/);
   await reason.fill("اختبار آلي للتصنيف");
   await panel.getByRole("button", { name: "حفظ التصنيف", exact: true }).click();
-  await expect(panel.locator(".category-confirmed")).toHaveText("تقرير");
+  await expect(panel.locator(".category-confirmed")).toHaveText("تقرير فني");
   await expect(panel.getByText(/اعتمده/)).toBeVisible();
   await page.screenshot({ path: info.outputPath("classification.png"), fullPage: true });
 
   await page.goto("/documents?category=report");
   await expect(page.getByRole("link", { name: /نص عربي.png image\/png/ })).toBeVisible();
-  await expect(page.locator("td .category-confirmed").first()).toHaveText("تقرير");
+  await expect(page.locator("td .category-confirmed").first()).toHaveText("تقرير فني");
   await page.goto("/documents?category=contract");
   await expect(page.getByRole("heading", { name: "لا توجد نتائج مطابقة", exact: true })).toBeVisible();
   await page.goto("/categories");
@@ -199,6 +199,37 @@ test("admin backs up, verifies and checks integrity; evaluation shows measured r
   // The test document was a poem: the classifier abstained, so accuracy is undefined but the label is counted.
   await expect(page.locator(".confusion")).toContainText("امتنع");
   await page.screenshot({ path: info.outputPath("evaluation.png"), fullPage: true });
+});
+
+test("folders: create, upload into a folder, filter; identical uploads are linked as duplicates", async ({ page }) => {
+  test.setTimeout(90_000);
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAZAAAADICAIAAABJdyC1AAACzUlEQVR4Xu3YsQ3CUBAFQQ65/5YPkZCDg68VMwXYF62ePbv7ACh4Fo4EeBMsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CAjOvUpTNz6tXAfbt7/yHfsrCADMECMo59En4cGZbAb87+zLGwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjKu45fOzPEbgAQLC8gQLCBjdjdzLPDfLCwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsIAMwQIyBAvIECwgQ7CADMECMgQLyBAsIEOwgAzBAjIEC8gQLCBDsICMF5URDZLuIWzqAAAAAElFTkSuQmCC", "base64");
+  await signIn(page);
+  await page.goto("/folders");
+  await page.getByLabel("اسم المجلد الجديد", { exact: true }).fill("الوارد 2026");
+  await page.getByRole("button", { name: "إنشاء مجلد", exact: true }).click();
+  await expect(page.locator(".folder-tree").getByRole("link", { name: "الوارد 2026" })).toBeVisible();
+  for (const name of ["مكرر-1.png", "مكرر-2.png"]) {
+    await page.goto("/upload");
+    await page.locator("#document-file").setInputFiles({ name, mimeType: "image/png", buffer: image });
+    await page.getByLabel("حفظ في المجلد", { exact: true }).selectOption({ label: "الوارد 2026" });
+    await page.getByRole("button", { name: "رفع وحفظ المستند", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "تم حفظ المستند", exact: true })).toBeVisible();
+  }
+  await page.getByRole("link", { name: "عرض المستند", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "مكرر-2.png", exact: true })).toBeVisible();
+  await expect(page.getByLabel("مجلد المستند", { exact: true })).toHaveValue(/.+/);
+  await expect(page.getByRole("heading", { name: "البيانات الوصفية", exact: true })).toBeVisible();
+  const relations = page.locator(".relations-panel");
+  await expect(relations.getByText("نسخة مطابقة (الملف نفسه)")).toBeVisible();
+  await expect(relations.getByRole("link", { name: /مكرر-1.png/ })).toBeVisible();
+  await relations.getByRole("button", { name: "تأكيد", exact: true }).click();
+  await expect(relations.getByText(/مؤكد/)).toBeVisible();
+  await page.goto("/folders");
+  await page.locator(".folder-tree").getByRole("link", { name: "الوارد 2026" }).click();
+  await expect(page.getByRole("link", { name: /مكرر-1.png image\/png/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /مكرر-2.png image\/png/ })).toBeVisible();
+  await expect(page.locator("tbody tr")).toHaveCount(2);
 });
 
 test("API failure shows an error rather than fabricated statistics", async ({ page }) => {

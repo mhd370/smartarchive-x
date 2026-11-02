@@ -189,14 +189,14 @@ class EvaluationTests(Archive):
         service = Classifications(self.db)
         service.seed()
         docs = []
-        for text in ('قرار إداري يقرر المادة الأولى يعمل به', 'تحية طيبة وبعد نرجو المحترم', 'قصيدة'):
+        for text in ('قرار إداري يقرر المادة الأولى يعمل به', 'السيد المدير المحترم نحيطكم علما ونرجو التكرم بالموافقة وتفضلوا بقبول فائق الاحترام', 'قصيدة'):
             doc = self.document(text.encode(), 'scan.png')
             with self.db.connect() as db:
                 PageTexts._upsert(db, doc, 1, 'ocr', None, None, text)
             service.suggest(doc)
             docs.append(doc)
         service.decide(docs[0], 'decision', '', service.get(docs[0])['sequence'], 'r')   # agrees
-        service.decide(docs[1], 'request', '', service.get(docs[1])['sequence'], 'r')    # disagrees (was letter)
+        service.decide(docs[1], 'admin_form', '', service.get(docs[1])['sequence'], 'r')  # disagrees (was a letter)
         service.decide(docs[2], 'report', '', service.get(docs[2])['sequence'], 'r')     # classifier abstained
         result = classification_accuracy(self.db)['summary']
         self.assertEqual((result['labelled'], result['covered']), (3, 2))
@@ -204,7 +204,7 @@ class EvaluationTests(Archive):
         self.assertEqual((result['accuracy_when_suggested'], result['accuracy_overall']), (0.5, 0.3333))
         confusion = classification_accuracy(self.db)['confusion']
         self.assertEqual(confusion['report'], {'abstain': 1})
-        self.assertEqual(confusion['request'], {'letter': 1})
+        self.assertEqual(confusion['admin_form'], {'outgoing_letter': 1})
 
 
 if __name__ == '__main__':

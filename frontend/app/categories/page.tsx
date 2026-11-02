@@ -27,7 +27,7 @@ export default function Categories() {
         <ul className="category-list">{resource.data!.items.map(item => <li key={item.id} className={item.active ? "" : "inactive"}>
           {editing === item.id ? <CategoryForm category={item} onDone={() => { setEditing(undefined); resource.reload(); }} /> : <>
             <div className="category-head">
-              <div><h3>{item.name} {!item.active && <span className="neutral-tag">موقوفة</span>}</h3>
+              <div><h3>{item.name} {item.group_name && <span className="category-badge category-suggested">{item.group_name}</span>} {!item.active && <span className="neutral-tag">موقوفة</span>}</h3>
                 <p>{item.description || "—"} · <span dir="ltr">{item.id}</span></p></div>
               <div className="category-counts">
                 <Link className="text-link" href={`/documents?category=${item.id}`}>{number(item.confirmed)} معتمد · {number(item.suggested)} مقترح<Icon name="arrow" /></Link>
@@ -47,12 +47,14 @@ function CategoryForm({ category, onDone }: { category?: Category; onDone: () =>
   const [description, setDescription] = useState(category?.description ?? "");
   const [keywords, setKeywords] = useState((category?.keywords ?? []).join("، "));
   const [active, setActive] = useState(category?.active ?? true);
+  const [group, setGroup] = useState(category?.group_id ?? "");
+  const groups = useApi<{ items: { id: string; name: string }[] }>("/category-groups");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      if (category) await patch(`/categories/${category.id}`, { name, description, keywords: split(keywords), active });
-      else await post("/categories", { id, name, description, keywords: split(keywords) });
+      if (category) await patch(`/categories/${category.id}`, { name, description, keywords: split(keywords), active, group_id: group || null });
+      else await post("/categories", { id, name, description, keywords: split(keywords), group_id: group || null });
       onDone();
     } catch (failure) { setError(failure instanceof Error ? failure.message : "تعذر حفظ الفئة."); }
     finally { setBusy(false); }
@@ -63,6 +65,9 @@ function CategoryForm({ category, onDone }: { category?: Category; onDone: () =>
       <input id="category-id" dir="ltr" value={id} onChange={e => setId(e.target.value)} required placeholder="memo" /></>}
     <label htmlFor="category-name">الاسم</label>
     <input id="category-name" value={name} onChange={e => setName(e.target.value)} required />
+    <label htmlFor="category-group">المجموعة (المستوى الأول)</label>
+    <select id="category-group" value={group} onChange={e => setGroup(e.target.value)}><option value="">بدون مجموعة</option>
+      {groups.data?.items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
     <label htmlFor="category-description">الوصف</label>
     <input id="category-description" value={description} onChange={e => setDescription(e.target.value)} />
     <label htmlFor="category-keywords">الكلمات المفتاحية (افصل بينها بفاصلة)</label>

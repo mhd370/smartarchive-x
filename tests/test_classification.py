@@ -66,11 +66,40 @@ class ServiceTests(unittest.TestCase):
                 PageTexts._upsert(db, doc_id, 1, 'ocr', None, None, text)
         return doc_id
 
-    def test_default_categories_are_seeded_once(self):
+    def test_brief_taxonomy_is_seeded_once_with_groups(self):
         self.service.seed()
-        ids = [item['id'] for item in self.service.categories()]
-        self.assertEqual(len(ids), 10)
-        self.assertIn('decision', ids)
+        items = self.service.categories()
+        self.assertEqual(len(items), 8)
+        self.assertEqual({item['group_id'] for item in items}, {'administrative', 'financial', 'legal', 'technical'})
+        self.assertEqual(next(i for i in items if i['id'] == 'invoice')['group_name'], 'مالي')
+        self.assertEqual([g['id'] for g in self.service.groups()], ['administrative', 'financial', 'legal', 'technical'])
+
+    def test_upgrade_keeps_used_and_admin_categories_and_retires_unused_old_defaults(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        db = Database(Path(temp.name) / 'old.sqlite3')
+        db.initialize()
+        with db.connect() as connection:
+            for cid, by in (('letter', 'system'), ('circular', 'system'), ('decision', 'system'), ('memo', 'admin')):
+                connection.execute('INSERT INTO categories VALUES (?,?,?,?,1,?,?,?)',
+                                   (cid, cid, '', '["x"]', by, '2026-01-01', '2026-01-01'))
+            connection.execute('INSERT INTO documents VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+                               ('d', 'a.png', 1, 'image/png', 'x' * 64, 'k', 1, 'ready', 'x', '2026', '2026'))
+            connection.execute("INSERT INTO classifications(id,document_id,kind,category_id,method,basis,reason,actor,"
+                               "created_at) VALUES ('c','d','decision','letter','human','{}','','r','2026')")
+        service = Classifications(db)
+        service.seed()
+        state = {item['id']: item['active'] for item in service.categories()}
+        self.assertEqual((state['letter'], state['circular'], state['memo']), (True, False, True))
+        self.assertEqual(next(i for i in service.categories() if i['id'] == 'decision')['name'], 'قرار إداري')
+        self.assertEqual(len([i for i in service.categories() if i['active']]), 10)
+
+    def test_group_only_suggestion_when_type_is_unclear(self):
+        doc = self.document('المبلغ ١٠٠ دينار والمجموع ٢٠٠ دولار')
+        record = self.service.suggest(doc)
+        basis = self.service.get(doc)['suggestion']['basis']
+        self.assertEqual(record['category_id'], 'invoice')
+        self.assertEqual(basis['group_id'], 'financial')
 
     def test_suggestion_then_confirmation_then_reclassification_with_reason(self):
         doc = self.document(DECISION)
@@ -93,14 +122,15 @@ class ServiceTests(unittest.TestCase):
             self.service.decide(doc, 'decision', 'x', confirmed['sequence'], 'r2')
         self.assertEqual(same.exception.code, 'unchanged')
         with self.assertRaises(ArchiveError) as no_reason:
-            self.service.decide(doc, 'letter', '', confirmed['sequence'], 'r2')
+            self.service.decide(doc, 'outgoing_letter', '', confirmed['sequence'], 'r2')
         self.assertEqual(no_reason.exception.code, 'reason_required')
         with self.assertRaises(ArchiveError) as stale:
-            self.service.decide(doc, 'letter', 'سبب', confirmed['sequence'] - 1, 'r2')
+            self.service.decide(doc, 'outgoing_letter', 'سبب', confirmed['sequence'] - 1, 'r2')
         self.assertEqual((stale.exception.code, stale.exception.status), ('stale_classification', 409))
-        changed = self.service.decide(doc, 'letter', 'الوثيقة كتاب مرفق بالقرار', confirmed['sequence'], 'r2')
-        self.assertEqual((changed['category_id'], changed['decision']['basis']['previous_category_id']), ('letter', 'decision'))
-        self.assertEqual(self.db.list('', None, None, 10, 0, category='letter')['total'], 1)
+        changed = self.service.decide(doc, 'outgoing_letter', 'الوثيقة كتاب مرفق بالقرار', confirmed['sequence'], 'r2')
+        self.assertEqual((changed['category_id'], changed['decision']['basis']['previous_category_id']),
+                         ('outgoing_letter', 'decision'))
+        self.assertEqual(self.db.list('', None, None, 10, 0, category='outgoing_letter')['total'], 1)
         self.assertEqual(self.db.list('', None, None, 10, 0, category='decision')['total'], 0)
         actions = [e['action'] for e in self.db.events(doc)]
         self.assertEqual(actions, ['classification.confirmed', 'classification.changed'])
@@ -120,7 +150,7 @@ class ServiceTests(unittest.TestCase):
         self.service.suggest(doc)
         with self.db.connect() as db:
             PageTexts._upsert(db, doc, 1, 'review', None, 1, LETTER)
-        self.assertEqual(self.service.suggest(doc)['category_id'], 'letter')
+        self.assertEqual(self.service.suggest(doc)['category_id'], 'outgoing_letter')
         self.assertEqual(len(self.service.get(doc)['history']), 2)
         with self.db.connect() as db, self.assertRaises(sqlite3.IntegrityError):
             db.execute("UPDATE classifications SET category_id='report'")

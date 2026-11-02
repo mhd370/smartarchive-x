@@ -14,7 +14,7 @@ import uuid
 
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
-from .classifier import DEFAULT_CATEGORIES, METHOD, Category, classify
+from .classifier import DEFAULT_CATEGORIES, GROUPS, METHOD, TAXONOMY_VERSION, Category, classify
 
 log = logging.getLogger(__name__)
 SYSTEM = 'system:classifier'
@@ -38,21 +38,51 @@ class Classifications:
 
     # -- categories ---------------------------------------------------------------------------
     def seed(self):
+        """Install the brief's taxonomy (8 types under 4 groups) on a new archive, or upgrade an older one."""
         with self.db.connect() as db:
-            if db.execute('SELECT COUNT(*) FROM categories').fetchone()[0]:
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT COUNT(*) FROM category_groups').fetchone()[0]:
                 return
             stamp = now()
-            db.executemany('INSERT INTO categories(id,name,description,keywords,active,created_by,created_at,updated_at)'
-                           ' VALUES (?,?,?,?,1,?,?,?)',
-                           [(cid, name, desc, json.dumps(words, ensure_ascii=False), 'system', stamp, stamp)
-                            for cid, name, desc, words in DEFAULT_CATEGORIES])
+            db.executemany('INSERT INTO category_groups(id,name,created_at) VALUES (?,?,?)',
+                           [(gid, name, stamp) for gid, name in GROUPS])
+            existing = {row['id']: dict(row) for row in db.execute('SELECT * FROM categories')}
+            for cid, name, group, desc, words in DEFAULT_CATEGORIES:
+                if cid in existing:
+                    if existing[cid]['created_by'] == 'system':  # refresh our own defaults, never an admin's edits
+                        db.execute('UPDATE categories SET name=?, description=?, keywords=?, updated_at=? WHERE id=?',
+                                   (name, desc, json.dumps(words, ensure_ascii=False), stamp, cid))
+                else:
+                    db.execute('INSERT INTO categories(id,name,description,keywords,active,created_by,created_at,updated_at)'
+                               ' VALUES (?,?,?,?,1,?,?,?)', (cid, name, desc, json.dumps(words, ensure_ascii=False),
+                                                             'system', stamp, stamp))
+                db.execute('INSERT OR REPLACE INTO category_group_members(category_id,group_id) VALUES (?,?)', (cid, group))
+            retired = []
+            for cid, row in existing.items():
+                if cid in {item[0] for item in DEFAULT_CATEGORIES}:
+                    continue
+                used = db.execute("SELECT 1 FROM classifications WHERE category_id=? AND kind='decision'", (cid,)).fetchone()
+                if row['created_by'] == 'system' and not used and row['active']:
+                    db.execute('UPDATE categories SET active=0, updated_at=? WHERE id=?', (stamp, cid))
+                    retired.append(cid)
+            if existing:
+                self._security(db, 'system', 'taxonomy.upgraded', TAXONOMY_VERSION,
+                               {'retired_unused_defaults': retired, 'kept': sorted(set(existing) - set(retired))})
+
+    def groups(self) -> list[dict]:
+        with self.db.connect() as db:
+            return [dict(row) for row in db.execute('SELECT g.*, (SELECT COUNT(*) FROM category_group_members m'
+                                                    ' WHERE m.group_id=g.id) AS categories FROM category_groups g'
+                                                    ' ORDER BY g.created_at, g.id')]
 
     def categories(self, include_inactive: bool = True) -> list[dict]:
         with self.db.connect() as db:
-            rows = db.execute('''SELECT c.*,
+            rows = db.execute('''SELECT c.*, m.group_id, g.name AS group_name,
                 (SELECT COUNT(*) FROM document_categories v WHERE v.category_id=c.id AND v.state='confirmed') AS confirmed,
                 (SELECT COUNT(*) FROM document_categories v WHERE v.category_id=c.id AND v.state='suggested') AS suggested
-                FROM categories c ORDER BY c.active DESC, c.created_at, c.name''').fetchall()
+                FROM categories c LEFT JOIN category_group_members m ON m.category_id=c.id
+                LEFT JOIN category_groups g ON g.id=m.group_id
+                ORDER BY c.active DESC, g.created_at, c.created_at, c.name''').fetchall()
         items = [_row(row) for row in rows]
         return items if include_inactive else [item for item in items if item['active']]
 
@@ -78,7 +108,8 @@ class Classifications:
             raise ArchiveError('invalid_name', 'اسم الفئة يجب أن يكون بين 2 و60 حرفًا.', 422)
         return name
 
-    def create_category(self, cid: str, name: str, description: str, keywords: list[str], actor: str) -> dict:
+    def create_category(self, cid: str, name: str, description: str, keywords: list[str], actor: str,
+                        group_id: str | None = None) -> dict:
         if not SLUG.fullmatch(cid or ''):
             raise ArchiveError('invalid_id', 'المعرّف بأحرف إنجليزية صغيرة وأرقام (2–40)، ويبدأ بحرف.', 422)
         name, words = self._clean_name(name), self._clean_keywords(keywords)
@@ -89,11 +120,14 @@ class Classifications:
             db.execute('INSERT INTO categories(id,name,description,keywords,active,created_by,created_at,updated_at)'
                        ' VALUES (?,?,?,?,1,?,?,?)', (cid, name, (description or '').strip()[:300],
                                                      json.dumps(words, ensure_ascii=False), actor, stamp, stamp))
-            self._security(db, actor, 'category.created', cid, {'name': name, 'keywords': words})
+            if group_id:
+                self._set_group(db, cid, group_id)
+            self._security(db, actor, 'category.created', cid, {'name': name, 'keywords': words, 'group_id': group_id})
         return self.category(cid)
 
     def update_category(self, cid: str, actor: str, name: str | None = None, description: str | None = None,
-                        keywords: list[str] | None = None, active: bool | None = None) -> dict:
+                        keywords: list[str] | None = None, active: bool | None = None,
+                        group_id: str | None = None) -> dict:
         current = self.category(cid)
         changes = {}
         if name is not None:
@@ -104,19 +138,29 @@ class Classifications:
             changes['keywords'] = json.dumps(self._clean_keywords(keywords), ensure_ascii=False)
         if active is not None:
             changes['active'] = int(active)
-        if not changes:
+        if not changes and not group_id:
             return current
         with self.db.connect() as db:
+            if group_id:
+                self._set_group(db, cid, group_id)
             if 'name' in changes and db.execute('SELECT 1 FROM categories WHERE name=? AND id<>?',
                                                 (changes['name'], cid)).fetchone():
                 raise ArchiveError('duplicate_category', 'توجد فئة أخرى بالاسم نفسه.', 409)
-            changes['updated_at'] = now()
+            changes['updated_at'] = now()  # also marks the taxonomy as changed, so suggestions are refreshed
             db.execute(f"UPDATE categories SET {','.join(f'{key}=?' for key in changes)} WHERE id=?",
                        [*changes.values(), cid])
+            if group_id:
+                changes['group_id'] = group_id
             self._security(db, actor, 'category.updated', cid,
                            {key: (json.loads(value) if key == 'keywords' else value)
                             for key, value in changes.items() if key != 'updated_at'})
         return self.category(cid)
+
+    @staticmethod
+    def _set_group(db, cid: str, group_id: str):
+        if not db.execute('SELECT 1 FROM category_groups WHERE id=?', (group_id,)).fetchone():
+            raise ArchiveError('group_not_found', 'المجموعة غير موجودة.', 422)
+        db.execute('INSERT OR REPLACE INTO category_group_members(category_id,group_id) VALUES (?,?)', (cid, group_id))
 
     def category(self, cid: str) -> dict:
         found = next((item for item in self.categories() if item['id'] == cid), None)
@@ -135,6 +179,8 @@ class Classifications:
                           ' ORDER BY page_no', (document_id,)).fetchall()
         text = '\n'.join(row['text'] for row in rows)
         stamp = db.execute('SELECT COALESCE(MAX(updated_at),\'\') FROM categories').fetchone()[0]
+        stamp += '|' + (db.execute("SELECT group_concat(category_id || ':' || group_id, ',') FROM"
+                                   ' (SELECT * FROM category_group_members ORDER BY category_id)').fetchone()[0] or '')
         digest = hashlib.sha256((text + '\x00' + stamp).encode()).hexdigest()
         basis = {'pages': len(rows), 'run_ids': sorted({row['run_id'] for row in rows if row['run_id']}),
                  'reviewed_pages': sum(1 for row in rows if row['source'] == 'review'),
@@ -153,14 +199,17 @@ class Classifications:
                               ' ORDER BY sequence DESC LIMIT 1', (document_id,)).fetchone()
             if last and not force and json.loads(last['basis']).get('digest') == digest:
                 return None
-            categories = [Category(row['id'], row['name'], json.loads(row['keywords'])) for row in
-                          db.execute('SELECT * FROM categories WHERE active=1 ORDER BY id').fetchall()]
+            categories = [Category(row['id'], row['name'], json.loads(row['keywords']), row['group_id']) for row in
+                          db.execute('SELECT c.*, m.group_id FROM categories c LEFT JOIN category_group_members m'
+                                     ' ON m.category_id=c.id WHERE c.active=1 ORDER BY c.id').fetchall()]
             result = classify(text, document['filename'], categories, self.min_score, self.min_confidence)
             record = {'id': str(uuid.uuid4()), 'document_id': document_id, 'kind': 'suggestion',
                       'category_id': result.category_id, 'confidence': result.confidence, 'method': METHOD,
                       'scores': json.dumps({k: v for k, v in result.candidates}, ensure_ascii=False),
                       'evidence': json.dumps(result.evidence, ensure_ascii=False),
-                      'basis': json.dumps({**basis, 'trigger': trigger, 'outcome': result.reason}),
+                      'basis': json.dumps({**basis, 'trigger': trigger, 'outcome': result.reason,
+                                           'group_id': result.group_id, 'group_confidence': result.group_confidence,
+                                           'group_scores': result.group_scores}, ensure_ascii=False),
                       'reason': result.reason, 'actor': actor, 'created_at': now()}
             db.execute(f"INSERT INTO classifications ({','.join(record)}) VALUES ({','.join('?' for _ in record)})",
                        list(record.values()))

@@ -13,6 +13,8 @@ export function ClassificationPanel({ documentId, onChanged }: { documentId: str
   const { can } = useAuth();
   const resource = useApi<Classification>(`/documents/${documentId}/classification`);
   const categories = useApi<{ items: Category[] }>("/categories");
+  const groups = useApi<{ items: { id: string; name: string }[] }>("/category-groups");
+  const groupNames: Record<string, string> = Object.fromEntries((groups.data?.items ?? []).map(item => [item.id, item.name]));
   const [choice, setChoice] = useState(""), [reason, setReason] = useState("");
   const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
 
@@ -53,6 +55,9 @@ export function ClassificationPanel({ documentId, onChanged }: { documentId: str
         {suggestion.confidence !== null && <span className="confidence tone-fair">ثقة {percent(suggestion.confidence)}</span>}
       </div>
       <p className="muted small-note">{suggestionOutcomes[suggestion.reason] ?? suggestion.reason}</p>
+      {typeof suggestion.basis.group_id === "string" && <p className="group-line">المستوى الأول: <b>{groupNames[suggestion.basis.group_id] ?? suggestion.basis.group_id}</b>
+        {typeof suggestion.basis.group_confidence === "number" && ` · ثقة ${percent(suggestion.basis.group_confidence)}`}
+        {!suggestion.category_id && " · النوع الفرعي غير مؤكد ويحتاج مراجعة"}</p>}
       {evidence.length > 0 && <ul className="keyword-list" aria-label="الكلمات التي بُني عليها الاقتراح">
         {evidence.slice(0, 6).map(hit => <li key={hit.keyword}><span dir="auto">{hit.keyword}</span>
           <small>{hit.count ? `×${number(hit.count)}` : ""}{hit.heading ? " · في العنوان" : ""}{hit.filename ? " · في اسم الملف" : ""}</small></li>)}

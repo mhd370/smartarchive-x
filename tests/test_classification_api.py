@@ -54,24 +54,24 @@ class ClassificationApiTests(unittest.TestCase):
         self.assertEqual(confirmed.json()['state'], 'confirmed')
         listed = viewer.get('/api/documents', params={'category': 'decision'}).json()
         self.assertEqual((listed['total'], listed['items'][0]['category_state']), (1, 'confirmed'))
-        self.assertEqual(viewer.get('/api/documents', params={'category': 'letter'}).json()['total'], 0)
+        self.assertEqual(viewer.get('/api/documents', params={'category': 'outgoing_letter'}).json()['total'], 0)
 
-        change = {'category_id': 'letter', 'expected_sequence': confirmed.json()['sequence']}
+        change = {'category_id': 'outgoing_letter', 'expected_sequence': confirmed.json()['sequence']}
         refused = reviewer.post(f'/api/documents/{doc_id}/classification', json=change)
         self.assertEqual((refused.status_code, refused.json()['code']), (422, 'reason_required'))
         changed = reviewer.post(f'/api/documents/{doc_id}/classification', json={**change, 'reason': 'كتاب مرافق'})
-        self.assertEqual(changed.json()['category_id'], 'letter')
+        self.assertEqual(changed.json()['category_id'], 'outgoing_letter')
         stale = reviewer.post(f'/api/documents/{doc_id}/classification', json={**change, 'reason': 'x'})
         self.assertEqual((stale.status_code, stale.json()['code']), (409, 'stale_classification'))
         actions = [e['action'] for e in self.admin.get(f'/api/documents/{doc_id}/audit').json()['items']]
         self.assertEqual([a for a in actions if a.startswith('classification.')],
                          ['classification.confirmed', 'classification.changed'])
 
-        self.assertEqual(viewer.get('/api/search', params={'q': 'قرار', 'category': 'letter'}).json()['total'], 1)
+        self.assertEqual(viewer.get('/api/search', params={'q': 'قرار', 'category': 'outgoing_letter'}).json()['total'], 1)
         self.assertEqual(viewer.get('/api/search', params={'q': 'قرار', 'category': 'decision'}).json()['total'], 0)
         stats = viewer.get('/api/statistics').json()
         self.assertEqual(stats['classification']['confirmed'], 1)
-        self.assertEqual(next(c for c in stats['categories'] if c['id'] == 'letter')['confirmed'], 1)
+        self.assertEqual(next(c for c in stats['categories'] if c['id'] == 'outgoing_letter')['confirmed'], 1)
 
     def test_manual_suggestion_and_category_administration(self):
         doc_id = self.processed('مستند.png')
@@ -79,7 +79,7 @@ class ClassificationApiTests(unittest.TestCase):
         self.assertEqual(viewer.get(f'/api/documents/{doc_id}/classification').json()['state'], 'uncertain')
         self.assertEqual(viewer.post(f'/api/documents/{doc_id}/classification/suggest').status_code, 403)
 
-        self.assertEqual(len(viewer.get('/api/categories').json()['items']), 10)
+        self.assertEqual(len(viewer.get('/api/categories').json()['items']), 8)
         body = {'id': 'admin-note', 'name': 'مذكرة إدارية', 'keywords': ['قرار', 'إداري', 'مذكرة']}
         self.assertEqual(viewer.post('/api/categories', json=body).status_code, 403)
         self.assertEqual(self.admin.post('/api/categories', json=body).status_code, 201)
