@@ -88,7 +88,7 @@ export type SearchPage = { page_no: number; source: TextSource; revision: number
 export type SearchItem = { document: DocumentRecord; score: number; filename_match: boolean; matched_pages: number;
   pages: SearchPage[] };
 export type SearchResult = { query: string; terms: string[]; items: SearchItem[]; total: number; limit: number;
-  offset: number; truncated: boolean };
+  offset: number; truncated: boolean; mode: "ranked" | "exact"; method?: string };
 export type Revision = { id: string; version: number; base_source: TextSource; base_run_id: string | null; note: string;
   author: string; created_at: string; characters: number };
 export type RevisionText = Revision & { text: string; document_id: string; page_no: number };

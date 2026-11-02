@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.12.0 — Sprint 7 / Task 012 (unreleased)
+- Ranked search (`hybrid-rrf-v1`, ADR 0009), now the default. Results are a reciprocal-rank fusion of three
+  rankings:
+  - pages containing every query word, with the whole phrase first;
+  - BM25 over light Arabic stems (prefixes و ف ب ك ل ال and common suffixes removed);
+  - BM25 over character trigrams, which still matches words misread by OCR.
+
+  A document scores as its best page. Development set, same OCR text: Recall@10 rose from 44.2% to 54.2%,
+  nDCG@10 from 33.3% to 37.7%, and reference-number Recall@10 from 12.2% to 30.5%. `mode=exact` and the
+  search page's «كل الكلمات حرفيًا» keep the previous behaviour.
+- Migration 6: FTS5 indexes `page_terms` and `page_trigrams`. They are derived from `page_texts`, updated with
+  every OCR result or correction and back-filled on start-up.
+- `tools/evaluate_synthetic.py` scores both search modes.
+
 ## 0.11.0 — Sprint 6 / Task 011 (unreleased)
 - Synthetic institutional corpus (`tools/synth_corpus.py`, ADR 0008): the brief's eight types rendered as
   real PDFs with correct right-to-left Arabic (paragraphs, two-column pages read right column first, tables),

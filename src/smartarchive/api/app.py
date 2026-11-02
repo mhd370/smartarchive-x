@@ -38,7 +38,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db)
-    backups = Backups(settings.storage_dir, settings.backup_dir, '0.11.0')
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.12.0')
     folders = Folders(db)
     metadata = Metadata(db)
     relations = Relations(db, metadata)
@@ -72,7 +72,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.11.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.12.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations
@@ -247,8 +247,12 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.get('/api/search')
     def search(user: Reader, q: str = Query(..., min_length=1, max_length=200),
                category: str | None = Query(None, max_length=40),
-               limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0, le=100_000)):
-        return texts.search(q, limit, offset, allowed=classes.documents_in(category) if category else None)
+               limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0, le=100_000),
+               mode: Literal['ranked', 'exact'] = 'ranked'):
+        """ranked (default): relevance order, tolerant of OCR errors and missing words; exact: every word present."""
+        allowed = classes.documents_in(category) if category else None
+        run = texts.search_ranked if mode == 'ranked' else texts.search
+        return run(q, limit, offset, allowed=allowed)
 
     @api.get('/api/review/queue')
     def review_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):

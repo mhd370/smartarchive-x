@@ -279,4 +279,11 @@ MIGRATIONS = [(2, '''
         UNIQUE(source_id, target_id, kind), CHECK(source_id <> target_id)
     );
     CREATE INDEX IF NOT EXISTS relations_target ON document_relations(target_id);
+'''),
+    # Ranked search (Sprint 7): derived full-text indexes of page_texts, rebuilt by PageTexts.ensure_indexed.
+    (6, '''
+    CREATE VIRTUAL TABLE IF NOT EXISTS page_terms USING fts5(
+        document_id UNINDEXED, page_no UNINDEXED, terms, tokenize='unicode61 remove_diacritics 2');
+    CREATE VIRTUAL TABLE IF NOT EXISTS page_trigrams USING fts5(
+        document_id UNINDEXED, page_no UNINDEXED, text, tokenize='trigram');
 ''')]
