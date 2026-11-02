@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 
@@ -14,13 +14,17 @@ from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
 from smartarchive.search.pages import PageTexts
 from smartarchive.classification.service import Classifications
+from smartarchive.enrichment.duplicates import Relations
+from smartarchive.enrichment.metadata import Metadata
 from smartarchive.operations import evaluation
 from smartarchive.operations.backup import Backups, integrity
 from smartarchive.services.auth import Accounts, can
 from smartarchive.services.documents import Documents, public_record
+from smartarchive.services.folders import Folders
 from .middleware import UploadLimitMiddleware
 from .schemas import (CategoryCreate, CategoryUpdate, ClassificationDecision, Credentials, Document, DocumentList,
-                      PageRevision, SetupRequest, Statistics, UserCreate, UserUpdate)
+                      FolderAssign, FolderCreate, MetadataEdit, PageRevision, RelationReview, SetupRequest, Statistics,
+                      UserCreate, UserUpdate)
 
 COOKIE = 'sa_session'
 
@@ -34,8 +38,19 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db)
-    backups = Backups(settings.storage_dir, settings.backup_dir, '0.9.0')
-    ocr.on_ready = classes.suggest_quietly
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.10.0')
+    folders = Folders(db)
+    metadata = Metadata(db)
+    relations = Relations(db, metadata)
+
+    def after_text_change(document_id: str, actor: str = 'system:enrichment', trigger: str = 'auto'):
+        """New or corrected text is new evidence: re-extract metadata, re-suggest the category, re-check relations.
+        Each step is isolated; none can fail the OCR run or the reviewer's save."""
+        metadata.run_quietly(document_id)
+        classes.suggest_quietly(document_id, actor if trigger == 'review' else 'system:classifier', trigger)
+        relations.detect_quietly(document_id)
+
+    ocr.on_ready = after_text_change
     worker = Worker(ocr)
 
     @asynccontextmanager
@@ -45,18 +60,26 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         texts.ensure_indexed()
         classes.seed()
         classes.ensure_suggested()
+        with db.connect() as connection:  # one-time backfill for archives older than Sprint 5
+            pending = [row[0] for row in connection.execute(
+                'SELECT DISTINCT document_id FROM page_texts t WHERE NOT EXISTS'
+                ' (SELECT 1 FROM metadata_values m WHERE m.document_id=t.document_id)')]
+        for document_id in pending:
+            metadata.run_quietly(document_id)
+        relations.ensure_fingerprinted()
         if settings.ocr_worker:
             worker.start()
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.9.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.10.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
+    api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations
     api.add_middleware(UploadLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024,
                        allowed_origins=settings.allowed_origins)
     api.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_credentials=True,
-                       allow_methods=['GET', 'POST', 'PATCH'], allow_headers=['Content-Type'],
+                       allow_methods=['GET', 'POST', 'PATCH', 'PUT'], allow_headers=['Content-Type'],
                        expose_headers=['Content-Disposition', 'ETag'])
 
     @api.exception_handler(ArchiveError)
@@ -142,29 +165,35 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     def statistics(user: Reader):
         queue = texts.queue(1, 0)
         return {**db.statistics(), 'pages_pending_review': queue['total'], 'pages_reviewed': queue['reviewed_pages'],
-                'classification': classes.summary(),
+                'classification': classes.summary(), 'relations': relations.summary(),
                 'categories': [{'id': c['id'], 'name': c['name'], 'confirmed': c['confirmed'], 'suggested': c['suggested']}
                                for c in classes.categories() if c['active'] or c['confirmed'] or c['suggested']]}
 
     @api.post('/api/documents', response_model=Document, status_code=201)
-    def upload(file: Annotated[UploadFile, File()], user: Uploader):
+    def upload(file: Annotated[UploadFile, File()], user: Uploader,
+               folder_id: Annotated[str | None, Form(max_length=40)] = None):
+        if folder_id:
+            folders.get(folder_id)  # refuse an unknown folder before storing anything
         configured = ocr.info()['configured']
         reason = 'OCR_NOT_REQUESTED' if configured else 'OCR_NOT_CONFIGURED'
         try:
             record = documents.ingest(file.file, file.filename, file.content_type, user['username'], reason)
         finally:
             file.file.close()
+        if folder_id:
+            folders.file(record['id'], folder_id, user['username'])
+        relations.detect_quietly(record['id'])  # exact duplicates are known before any OCR
         if configured and settings.ocr_auto:
             ocr.enqueue(documents.get(record['id']), user['username'], 'upload')
-            return public_record(documents.get(record['id']))
-        return record
+            return with_folder(public_record(documents.get(record['id'])))
+        return with_folder(record)
 
     @api.get('/api/documents', response_model=DocumentList)
     def listing(user: Reader, q: str = Query('', max_length=200), status: ProcessingStatus | None = None,
                 kind: Literal['pdf', 'image'] | None = None,
-                category: str | None = Query(None, max_length=40),
+                category: str | None = Query(None, max_length=40), folder: str | None = Query(None, max_length=40),
                 limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):
-        result = db.list(q, status.value if status else None, kind, limit, offset, category)
+        result = db.list(q, status.value if status else None, kind, limit, offset, category, folder)
         result['items'] = [public_record(row) for row in result['items']]
         return result
 
@@ -172,7 +201,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     def detail(document_id: UUID, user: Reader):
         record = documents.get(str(document_id))
         db.event(record['id'], 'document.viewed', actor=user['username'])
-        return public_record(record)
+        return with_folder(public_record(record))
 
     def latest_ready(document_id: str) -> dict | None:
         return next((run for run in ocr.runs(document_id) if run['status'] == 'ready'), None)
@@ -238,8 +267,51 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     def revise_page(document_id: UUID, page: int, body: PageRevision, user: Reviewer):
         record = documents.get(str(document_id))
         result = texts.revise(record, page, body.text, body.expected_version, body.note, user['username'])
-        classes.suggest_quietly(record['id'], user['username'], 'review')  # corrected text may change the category
+        after_text_change(record['id'], user['username'], 'review')  # corrected text is new evidence
         return result
+
+    # -- folders, metadata and relations (Sprint 5) ----------------------------------------------
+    def with_folder(record: dict) -> dict:
+        folder = folders.of(record['id'])
+        return {**record, 'folder_id': folder['id'] if folder else None, 'folder_path': folder['path'] if folder else None}
+
+    @api.get('/api/folders')
+    def folder_tree(user: Reader):
+        return {'items': folders.tree()}
+
+    @api.post('/api/folders', status_code=201)
+    def folder_create(body: FolderCreate, user: Uploader):
+        return folders.create(body.name, body.parent_id, user['username'])
+
+    @api.patch('/api/documents/{document_id}/folder')
+    def document_folder(document_id: UUID, body: FolderAssign, user: Uploader):
+        record = documents.get(str(document_id))
+        folders.file(record['id'], body.folder_id, user['username'])
+        return with_folder(public_record(record))
+
+    @api.get('/api/documents/{document_id}/metadata')
+    def document_metadata(document_id: UUID, user: Reader):
+        return metadata.get(documents.get(str(document_id))['id'])
+
+    @api.put('/api/documents/{document_id}/metadata/{field}')
+    def document_metadata_edit(document_id: UUID, field: str, body: MetadataEdit, user: Reviewer):
+        record = documents.get(str(document_id))
+        result = metadata.edit(record['id'], field, body.value, user['username'])
+        classes.suggest_quietly(record['id'], user['username'], 'metadata')
+        relations.detect_quietly(record['id'])
+        return result
+
+    @api.get('/api/documents/{document_id}/relations')
+    def document_relations(document_id: UUID, user: Reader):
+        return {'items': relations.of(documents.get(str(document_id))['id'])}
+
+    @api.post('/api/relations/{relation_id}/review')
+    def relation_review(relation_id: UUID, body: RelationReview, user: Reviewer):
+        return relations.review(str(relation_id), body.status, user['username'])
+
+    @api.get('/api/category-groups')
+    def category_groups(user: Reader):
+        return {'items': classes.groups()}
 
     # -- classification (Sprint 3) --------------------------------------------------------------
     @api.get('/api/categories')
@@ -248,12 +320,13 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
 
     @api.post('/api/categories', status_code=201)
     def create_category(body: CategoryCreate, user: Admin):
-        return classes.create_category(body.id, body.name, body.description, body.keywords, user['username'])
+        return classes.create_category(body.id, body.name, body.description, body.keywords, user['username'],
+                                       body.group_id)
 
     @api.patch('/api/categories/{category_id}')
     def update_category(category_id: str, body: CategoryUpdate, user: Admin):
         return classes.update_category(category_id, user['username'], name=body.name, description=body.description,
-                                       keywords=body.keywords, active=body.active)
+                                       keywords=body.keywords, active=body.active, group_id=body.group_id)
 
     @api.get('/api/classification/queue')
     def classification_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100),

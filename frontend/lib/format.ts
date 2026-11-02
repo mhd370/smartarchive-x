@@ -27,6 +27,6 @@ export const actors = (actor: string) => actor === "local" ? "جلسة محلي�
 export const categoryStates = { confirmed: "معتمد", suggested: "مقترح", uncertain: "غير مؤكد", none: "غير مصنّف" } as const;
 export const suggestionOutcomes: Record<string, string> = {
   suggested: "اقتراح بثقة كافية", weak_evidence: "الأدلة ضعيفة (كلمة واحدة أو أقل من الحد)",
-  ambiguous: "أكثر من فئة متقاربة", no_keywords: "لا توجد كلمات مفتاحية معروفة في النص", no_text: "لا يوجد نص",
+  ambiguous: "أكثر من فئة متقاربة", group_only: "المجموعة واضحة والنوع غير مؤكد", no_keywords: "لا توجد كلمات مفتاحية معروفة في النص", no_text: "لا يوجد نص",
 };
 export const sources = { ocr: "نص آلي (OCR)", review: "نص مُراجَع بشريًا" } as const;

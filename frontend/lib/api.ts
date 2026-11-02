@@ -5,6 +5,7 @@ export type DocumentRecord = {
   id: string; filename: string; size_bytes: number; mime_type: string; sha256: string;
   page_count: number; status: Status; status_reason: string; created_at: string; updated_at: string;
   category_id?: string | null; category_name?: string | null; category_state?: CategoryState | null;
+  folder_id?: string | null; folder_path?: string | null;
 };
 export type DocumentList = { items: DocumentRecord[]; total: number; limit: number; offset: number };
 export type Statistics = { total_documents: number; total_bytes: number; by_status: Record<Status, number>;
@@ -58,7 +59,17 @@ export type EvaluationReport = { generated_at: string;
       recall: number | null; f1: number | null }[];
     confusion: Record<string, Record<string, number>> } };
 export type CategoryState = "confirmed" | "suggested" | "uncertain" | "none";
-export type Category = { id: string; name: string; description: string; keywords: string[]; active: boolean;
+export type Folder = { id: string; parent_id: string | null; name: string; path: string; created_by: string;
+  created_at: string; documents: number; total_documents: number; depth: number };
+export type CategoryGroup = { id: string; name: string; categories: number };
+export type MetadataField = { field: string; value: string | null; normalized: string | null; source: "extracted" | "human" | null;
+  confidence: number | null; page_no: number | null; actor: string | null; updated_at: string | null;
+  extracted_value: string | null; protected: boolean; history: number };
+export type MetadataResult = { document_id: string; method: string; extracted: boolean; fields: Record<string, MetadataField> };
+export type Relation = { id: string; source_id: string; target_id: string; other_id: string; kind: "exact_duplicate" | "near_duplicate" | "version_of";
+  score: number; method: string; evidence: Record<string, unknown>; status: "suggested" | "confirmed" | "rejected";
+  created_at: string; reviewed_by: string | null; other_filename: string | null; other_created_at: string | null; direction: "newer" | "older" };
+export type Category = { group_id?: string | null; group_name?: string | null; id: string; name: string; description: string; keywords: string[]; active: boolean;
   created_by: string; created_at: string; updated_at: string; confirmed: number; suggested: number };
 export type KeywordHit = { keyword: string; count: number; heading: boolean; filename: boolean; points: number };
 export type ClassificationRecord = { sequence: number; id: string; document_id: string; kind: "suggestion" | "decision";
@@ -126,8 +137,9 @@ async function request<T>(method: string, path: string, body?: unknown, signal?:
 export const get = <T,>(path: string, signal?: AbortSignal) => request<T>("GET", path, undefined, signal);
 export const post = <T,>(path: string, body?: unknown) => request<T>("POST", path, body ?? {});
 export const patch = <T,>(path: string, body: unknown) => request<T>("PATCH", path, body);
+export const put = <T,>(path: string, body: unknown) => request<T>("PUT", path, body);
 
-export function upload(file: File, onProgress: (value: number) => void, signal: AbortSignal): Promise<DocumentRecord> {
+export function upload(file: File, onProgress: (value: number) => void, signal: AbortSignal, folderId?: string): Promise<DocumentRecord> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", apiUrl("/documents"));
@@ -146,7 +158,7 @@ export function upload(file: File, onProgress: (value: number) => void, signal: 
     const cancel = () => xhr.abort();
     signal.addEventListener("abort", cancel, { once: true });
     xhr.onloadend = () => signal.removeEventListener("abort", cancel);
-    const body = new FormData(); body.append("file", file);
+    const body = new FormData(); body.append("file", file); if (folderId) body.append("folder_id", folderId);
     xhr.send(body);
   });
 }

@@ -24,6 +24,8 @@ APPLICATION = ('src/smartarchive/api/', 'src/smartarchive/classification/', 'src
                'tests/test_search.py', 'tests/test_review_api.py', 'tests/test_classification.py',
                'tests/test_classification_api.py', 'tests/test_operations.py', 'tests/test_operations_api.py',
                'src/smartarchive/operations/', 'tools/archive_ops.py',
+               'src/smartarchive/enrichment/', 'tools/import_tree.py', 'tests/test_enrichment.py',
+               'tests/test_enrichment_api.py',
                'README.md', 'CHANGELOG.md', 'docs/web_application.md',
                'requirements-api.txt', 'requirements-dev.txt', '.gitignore', '.env.example')
 

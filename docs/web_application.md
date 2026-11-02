@@ -1,6 +1,6 @@
 # Local full-stack application (Task 005, extended in Tasks 006 and 007)
 
-Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md). Task 008 (Sprint 3) added classification, rows marked *(008)*, [ADR 0005](adr/0005-explainable-classification.md). Task 009 (Sprint 4) added operations and evaluation, rows marked *(009)*, [ADR 0006](adr/0006-backup-integrity-evaluation.md).
+Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md). Task 008 (Sprint 3) added classification, rows marked *(008)*, [ADR 0005](adr/0005-explainable-classification.md). Task 009 (Sprint 4) added operations and evaluation, rows marked *(009)*, [ADR 0006](adr/0006-backup-integrity-evaluation.md). Task 010 (Sprint 5) added folders, metadata and relations, rows marked *(010)*, [ADR 0007](adr/0007-folders-metadata-duplicates.md).
 
 Task 006 added sign-in, roles and the OCR pipeline; every endpoint except `/api/health` and `/api/auth/*` now requires a session. Roles: admin (everything), archivist (upload, run OCR), reviewer (read, review in later tasks), viewer (read/download).
 
@@ -107,6 +107,11 @@ Root `.env.example` documents backend variables; they are read from the environm
 | POST `/api/admin/backups/{name}/verify`, GET `.../download` *(009)* | Admin: verify every member and the database / download the zip |
 | POST `/api/admin/integrity` *(009)* | Admin: reconcile originals with the database; report only |
 | GET `/api/evaluation` *(009)* | Reviewer/archivist/admin: OCR post-editing CER/WER and classification accuracy from reviewed data |
+| GET/POST `/api/folders` *(010)* | Folder tree with counts / create (`name`, `parent_id`; archivist, admin) |
+| PATCH `/api/documents/{uuid}/folder` *(010)* | Move a document (`folder_id` or null); POST `/api/documents` accepts form field `folder_id`; `/api/documents?folder=` includes sub-folders |
+| GET `/api/documents/{uuid}/metadata`, PUT `.../metadata/{field}` *(010)* | Extracted/corrected number, date, sender, recipient, subject, amount; reviewers edit |
+| GET `/api/documents/{uuid}/relations`, POST `/api/relations/{id}/review` *(010)* | Duplicate/version links; reviewers confirm or reject |
+| GET `/api/category-groups` *(010)* | Level-1 groups; categories carry `group_id` |
 | GET `/api/documents/{uuid}/audit` | Ordered append-only event history |
 | GET `/api/documents/{uuid}/download` | Integrity-checked unchanged original as attachment |
 | GET `/api/documents/{uuid}/content` | Integrity-checked original inline; supports PDF byte ranges |

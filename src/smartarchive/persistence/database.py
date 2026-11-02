@@ -89,7 +89,7 @@ class Database:
             return dict(row) if row else None
 
     def list(self, query: str, status: str | None, kind: str | None, limit: int, offset: int,
-             category: str | None = None):
+             category: str | None = None, folder: str | None = None):
         clauses, values = [], []
         if query:
             literal = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
@@ -100,17 +100,24 @@ class Database:
             values.append(status)
         if kind:
             clauses.append("d.mime_type='application/pdf'" if kind == 'pdf' else "d.mime_type LIKE 'image/%'")
+        if folder:
+            # the folder itself and everything below it (path prefix, no LIKE wildcards involved)
+            clauses.append('df.folder_id IN (SELECT s.id FROM folders s, folders p WHERE p.id=? AND (s.id=p.id OR'
+                           " substr(s.path, 1, length(p.path) + 1) = p.path || '/'))")
+            values.append(folder)
         if category == 'none':
             clauses.append('v.category_id IS NULL')
         elif category:
             clauses.append('v.category_id=?')
             values.append(category)
         source = ' FROM documents d LEFT JOIN document_categories v ON v.document_id=d.id' \
-                 ' LEFT JOIN categories c ON c.id=v.category_id'
+                 ' LEFT JOIN categories c ON c.id=v.category_id LEFT JOIN document_folders df ON df.document_id=d.id' \
+                 ' LEFT JOIN folders f ON f.id=df.folder_id'
         where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
         with self.connect() as db:
             total = db.execute('SELECT COUNT(*)' + source + where, values).fetchone()[0]
-            rows = db.execute('SELECT d.*, v.category_id, v.state AS category_state, c.name AS category_name' + source +
+            rows = db.execute('SELECT d.*, v.category_id, v.state AS category_state, c.name AS category_name,'
+                              ' df.folder_id, f.path AS folder_path' + source +
                               where + ' ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?',
                               [*values, limit, offset]).fetchall()
             return {'items': [dict(row) for row in rows], 'total': total, 'limit': limit, 'offset': offset}
@@ -227,4 +234,49 @@ MIGRATIONS = [(2, '''
         WHERE document_id=d.id AND kind='decision')
     LEFT JOIN classifications sug ON sug.sequence = (SELECT MAX(sequence) FROM classifications
         WHERE document_id=d.id AND kind='suggestion');
+'''),
+    # Sprint 5: folders, category groups, extracted/edited metadata, fingerprints and document relations.
+    (5, '''
+    CREATE TABLE IF NOT EXISTS folders (
+        id TEXT PRIMARY KEY, parent_id TEXT REFERENCES folders(id), name TEXT NOT NULL, path TEXT NOT NULL UNIQUE,
+        created_by TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS folders_parent ON folders(parent_id);
+    CREATE TABLE IF NOT EXISTS document_folders (
+        document_id TEXT PRIMARY KEY REFERENCES documents(id), folder_id TEXT NOT NULL REFERENCES folders(id),
+        assigned_by TEXT NOT NULL, assigned_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS document_folders_folder ON document_folders(folder_id);
+    CREATE TABLE IF NOT EXISTS category_groups (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS category_group_members (
+        category_id TEXT PRIMARY KEY REFERENCES categories(id), group_id TEXT NOT NULL REFERENCES category_groups(id)
+    );
+    CREATE TABLE IF NOT EXISTS metadata_values (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, document_id TEXT NOT NULL REFERENCES documents(id),
+        run TEXT NOT NULL, field TEXT NOT NULL, value TEXT, normalized TEXT, raw TEXT, page_no INTEGER,
+        start_offset INTEGER, end_offset INTEGER, confidence REAL,
+        source TEXT NOT NULL CHECK(source IN ('extracted','human')), method TEXT NOT NULL,
+        actor TEXT NOT NULL, created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS metadata_document ON metadata_values(document_id, field, sequence);
+    CREATE TRIGGER IF NOT EXISTS metadata_no_update BEFORE UPDATE ON metadata_values
+        BEGIN SELECT RAISE(ABORT,'metadata values are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS metadata_no_delete BEFORE DELETE ON metadata_values
+        BEGIN SELECT RAISE(ABORT,'metadata values are append-only'); END;
+    CREATE TABLE IF NOT EXISTS document_fingerprints (
+        document_id TEXT PRIMARY KEY REFERENCES documents(id), sha256 TEXT NOT NULL, minhash TEXT,
+        shingles INTEGER NOT NULL, text_digest TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS document_relations (
+        id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES documents(id),
+        target_id TEXT NOT NULL REFERENCES documents(id),
+        kind TEXT NOT NULL CHECK(kind IN ('exact_duplicate','near_duplicate','version_of')),
+        score REAL NOT NULL, method TEXT NOT NULL, evidence TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('suggested','confirmed','rejected')),
+        created_at TEXT NOT NULL, reviewed_by TEXT, reviewed_at TEXT,
+        UNIQUE(source_id, target_id, kind), CHECK(source_id <> target_id)
+    );
+    CREATE INDEX IF NOT EXISTS relations_target ON document_relations(target_id);
 ''')]

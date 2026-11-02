@@ -18,6 +18,8 @@ class Document(BaseModel):
     category_id: str | None = None
     category_name: str | None = None
     category_state: str | None = None
+    folder_id: str | None = None
+    folder_path: str | None = None
 
 
 class DocumentList(BaseModel):
@@ -34,6 +36,7 @@ class Statistics(BaseModel):
     pages_pending_review: int = 0
     pages_reviewed: int = 0
     classification: dict[str, int] = Field(default_factory=dict)
+    relations: dict[str, dict[str, int]] = Field(default_factory=dict)
     categories: list[dict] = Field(default_factory=list)
 
 
@@ -68,6 +71,7 @@ class CategoryCreate(BaseModel):
     name: str
     description: str = ''
     keywords: list[str]
+    group_id: str | None = None
 
 
 class CategoryUpdate(BaseModel):
@@ -75,9 +79,27 @@ class CategoryUpdate(BaseModel):
     description: str | None = None
     keywords: list[str] | None = None
     active: bool | None = None
+    group_id: str | None = None
 
 
 class ClassificationDecision(BaseModel):
     category_id: str
     expected_sequence: int
     reason: str = ''
+
+
+class FolderCreate(BaseModel):
+    name: str
+    parent_id: str | None = None
+
+
+class FolderAssign(BaseModel):
+    folder_id: str | None = None
+
+
+class MetadataEdit(BaseModel):
+    value: str | None = None
+
+
+class RelationReview(BaseModel):
+    status: str

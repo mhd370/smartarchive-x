@@ -1,6 +1,6 @@
 # SmartArchive-X
 
-Intelligent Arabic institutional document archiving graduation project. **Current status (v0.9.0, Sprint 4): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, Arabic full-text search, versioned human review of low-confidence pages, explainable document classification with human confirmation, verified backups with safe restore, an integrity check, and measured OCR/classification accuracy from the archive's own reviewed data, plus preserved research tools.** First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
+Intelligent Arabic institutional document archiving graduation project. **Current status (v0.10.0, Sprint 5): signed-in archive with roles and audit identity, automatic per-page quality assessment and Tesseract OCR with traceable text boxes, Arabic full-text search, versioned human review of low-confidence pages, explainable document classification with human confirmation, verified backups with safe restore, an integrity check, measured OCR/classification accuracy from the archive's own reviewed data, archive folders with bulk import, the brief's eight document types in a two-level hierarchy, metadata extraction (number, date, sender, recipient, subject, amount) and duplicate/version detection, plus preserved research tools.** The dean's requirements and their status: [docs/dean_requirements.md](docs/dean_requirements.md). First start opens a one-time admin setup at `/login`. FastAPI + SQLite backend; Next.js + TypeScript + Tailwind Arabic RTL frontend. Target: Windows 11, Python 3.11.9, one developer, approximately eight weeks.
 
 ## Run the web application
 
@@ -127,6 +127,15 @@ Decisions are recorded in `docs/adr/`; changes per version in `CHANGELOG.md`.
 ```
 
 The first compares pre-audit hashes of experimental sources, inputs and results; it is not a backup. Tests cover benchmark metrics/validation/provenance plus preserved legacy characterization. They do not establish OCR accuracy. Inputs, GT and outputs remain ignored and need a separate backup.
+
+## Folders and bulk import (Sprint 5)
+
+```powershell
+.\.venv\Scripts\python.exe tools/import_tree.py D:\scans --into "وارد 2026" --dry-run
+.\.venv\Scripts\python.exe tools/import_tree.py D:\scans --into "وارد 2026"
+```
+
+Sub-folders become archive folders; every file passes the same validation as a web upload; a report is written to `results\imports`.
 
 ## Next engineering task
 

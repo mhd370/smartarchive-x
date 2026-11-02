@@ -12,6 +12,10 @@ Confidence = top / (top + runner_up + 1): high only when one category clearly le
 The classifier abstains (no category) when the top score (default 3) or confidence (default 0.5) is
 below the thresholds: a single keyword, even in the heading, is not enough.
 It only suggests; a person confirms or changes every classification.
+
+Hierarchy: each type belongs to a level-1 group (administrative, financial, legal, technical). Group scores
+are the sums of their types' scores, so a document can be confidently "financial" while its type is unclear;
+the result then names the group and leaves the type to a person (reason `group_only`).
 """
 from dataclasses import dataclass, field
 import re
@@ -29,6 +33,7 @@ class Category:
     id: str
     name: str
     keywords: list[str]
+    group_id: str | None = None
 
 
 @dataclass
@@ -38,6 +43,9 @@ class Result:
     scores: dict[str, float]
     evidence: dict[str, list[dict]] = field(default_factory=dict)
     reason: str = ''
+    group_id: str | None = None
+    group_confidence: float | None = None
+    group_scores: dict[str, float] = field(default_factory=dict)
 
     @property
     def candidates(self) -> list[tuple[str, float]]:
@@ -77,38 +85,63 @@ def classify(text: str, filename: str, categories: list[Category],
         scores[category.id] = total
         if hits:
             evidence[category.id] = sorted(hits, key=lambda hit: -hit['points'])
+    # Level 1 (group): the evidence of all its types together. A clear group with an unclear type is
+    # reported as such (e.g. financial -> uncertain subtype -> human review), as the hierarchy intends.
+    groups: dict[str, float] = {}
+    for category in categories:
+        if category.group_id:
+            groups[category.group_id] = groups.get(category.group_id, 0.0) + scores[category.id]
+    group_id, group_confidence = _leader(groups, min_score, min_confidence)
     ranked = sorted(scores.values(), reverse=True) + [0.0, 0.0]
     top, second = ranked[0], ranked[1]
+    extra = {'group_id': group_id, 'group_confidence': group_confidence, 'group_scores': groups}
     if top <= 0:
-        return Result(None, None, scores, evidence, 'no_keywords' if normalized or name else 'no_text')
+        return Result(None, None, scores, evidence, 'no_keywords' if normalized or name else 'no_text', **extra)
     confidence = round(top / (top + second + 1), 4)
     best = max(scores, key=lambda key: scores[key])
     if top < min_score:
-        return Result(None, confidence, scores, evidence, 'weak_evidence')
+        return Result(None, confidence, scores, evidence, 'weak_evidence', **extra)
     if confidence < min_confidence:
-        return Result(None, confidence, scores, evidence, 'ambiguous')
-    return Result(best, confidence, scores, evidence, 'suggested')
+        return Result(None, confidence, scores, evidence, 'group_only' if group_id else 'ambiguous', **extra)
+    owner = next((c.group_id for c in categories if c.id == best), None)
+    if owner:  # the chosen type always belongs to the reported group
+        rivals = max((value for key, value in groups.items() if key != owner), default=0.0)
+        extra.update(group_id=owner, group_confidence=round(groups[owner] / (groups[owner] + rivals + 1), 4))
+    return Result(best, confidence, scores, evidence, 'suggested', **extra)
 
 
+def _leader(scores: dict[str, float], min_score: float, min_confidence: float) -> tuple[str | None, float | None]:
+    ranked = sorted(scores.items(), key=lambda item: -item[1]) + [(None, 0.0), (None, 0.0)]
+    (best, top), (_, second) = ranked[0], ranked[1]
+    if not best or top < min_score:
+        return None, None
+    confidence = round(top / (top + second + 1), 4)
+    return (best, confidence) if confidence >= min_confidence else (None, confidence)
+
+
+GROUPS = [('administrative', 'إداري'), ('financial', 'مالي'), ('legal', 'قانوني'), ('technical', 'فني')]
+
+# The eight document types proposed in the project brief, under four level-1 groups.
 DEFAULT_CATEGORIES = [
-    ('decision', 'قرار إداري', 'قرارات وأوامر إدارية صادرة عن جهة مختصة',
+    ('incoming_letter', 'مراسلة واردة', 'administrative', 'كتب ومراسلات واردة إلى المؤسسة من جهات أخرى',
+     ['وارد', 'رقم الوارد', 'تاريخ الورود', 'كتابكم رقم', 'اشارة الى كتابكم', 'ردا على كتابكم', 'ورد الينا',
+      'الجهة المرسلة', 'تحية طيبة وبعد']),
+    ('outgoing_letter', 'مراسلة صادرة', 'administrative', 'كتب ومراسلات صادرة من المؤسسة إلى جهات أخرى',
+     ['صادر', 'رقم الصادر', 'نحيطكم علما', 'نرجو التكرم', 'يرجى التكرم', 'نفيدكم', 'تفضلوا بقبول فائق الاحترام',
+      'المحترم', 'مع الشكر']),
+    ('decision', 'قرار إداري', 'administrative', 'قرارات وأوامر إدارية صادرة عن جهة مختصة',
      ['قرار', 'يقرر', 'تقرر', 'قررنا', 'المادة', 'يعمل به', 'يبلغ', 'بناء على', 'استنادا', 'صلاحيات', 'المصادقة']),
-    ('circular', 'تعميم', 'تعاميم وتوجيهات موجهة لعدد من الجهات أو الموظفين',
-     ['تعميم', 'يعمم', 'نعمم', 'جميع الموظفين', 'كافة', 'للاطلاع', 'التقيد', 'الالتزام بما ورد', 'العاملين']),
-    ('letter', 'مراسلة رسمية', 'كتب ومراسلات صادرة أو واردة',
-     ['المحترم', 'تحية طيبة', 'وبعد', 'نرجو', 'يرجى', 'نحيطكم', 'الموضوع', 'المرفق', 'مع الشكر', 'كتابكم', 'الاحترام']),
-    ('minutes', 'محضر اجتماع', 'محاضر الاجتماعات واللجان',
+    ('admin_form', 'نموذج إداري', 'administrative', 'نماذج واستمارات وطلبات إدارية معبأة',
+     ['نموذج', 'استمارة', 'طلب', 'الاسم الكامل', 'الرقم الوظيفي', 'توقيع مقدم الطلب', 'يعبأ من قبل', 'اسم الموظف',
+      'القسم', 'خاص بالادارة']),
+    ('minutes', 'محضر اجتماع', 'administrative', 'محاضر الاجتماعات واللجان',
      ['محضر', 'اجتماع', 'الحضور', 'جدول الاعمال', 'المجتمعون', 'انعقد', 'الجلسة', 'اللجنة', 'رئيس اللجنة', 'تقرر']),
-    ('report', 'تقرير', 'تقارير دورية أو فنية أو إحصائية',
-     ['تقرير', 'ملخص', 'النتائج', 'التوصيات', 'خلال الفترة', 'احصائيات', 'نسبة', 'الانجاز', 'التحليل']),
-    ('contract', 'عقد أو اتفاقية', 'عقود واتفاقيات ومذكرات تفاهم',
+    ('contract', 'عقد أو اتفاقية', 'legal', 'عقود واتفاقيات ومذكرات تفاهم',
      ['عقد', 'اتفاقية', 'الطرف الاول', 'الطرف الثاني', 'الطرفين', 'بنود', 'يلتزم', 'مدة العقد', 'مذكرة تفاهم', 'التزامات']),
-    ('financial', 'مستند مالي', 'فواتير وسندات صرف وقبض وكشوف مالية',
-     ['فاتورة', 'المبلغ', 'المجموع', 'ضريبة', 'دينار', 'ريال', 'دولار', 'سند صرف', 'سند قبض', 'الرصيد', 'الموازنة', 'شيك']),
-    ('certificate', 'شهادة', 'شهادات وإفادات رسمية',
-     ['شهادة', 'يشهد', 'نشهد', 'نفيد', 'افادة', 'لمن يهمه الامر', 'حصل على', 'بتقدير', 'منحت']),
-    ('request', 'طلب', 'طلبات واستدعاءات مقدمة من أفراد أو جهات',
-     ['طلب', 'مقدم الطلب', 'ارجو الموافقة', 'استدعاء', 'التماس', 'الموافقة على', 'اتقدم', 'راجيا']),
-    ('personnel', 'شؤون الموظفين', 'تعيين ونقل وإجازات وترقيات ورواتب الموظفين',
-     ['اجازة', 'تعيين', 'نقل', 'ترقية', 'الموظف', 'الرقم الوظيفي', 'راتب', 'الدرجة الوظيفية', 'مباشرة العمل', 'استقالة']),
+    ('invoice', 'فاتورة', 'financial', 'فواتير ومطالبات مالية',
+     ['فاتورة', 'رقم الفاتورة', 'المبلغ', 'المجموع', 'الاجمالي', 'ضريبة', 'الكمية', 'سعر الوحدة', 'دينار', 'ريال',
+      'دولار', 'المورد']),
+    ('report', 'تقرير فني', 'technical', 'تقارير فنية ودورية وإحصائية',
+     ['تقرير', 'ملخص', 'النتائج', 'التوصيات', 'المنهجية', 'خلال الفترة', 'احصائيات', 'نسبة', 'الانجاز', 'التحليل']),
 ]
+TAXONOMY_VERSION = 'brief-v1'

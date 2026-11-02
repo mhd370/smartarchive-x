@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.10.0 — Sprint 5 / Task 010 (unreleased)
+- `docs/dean_requirements.md`: the dean's brief verbatim with a requirement-by-requirement status table.
+- Folders: tree with document counts, upload into a folder, move (audited `document.filed`), filter documents
+  by folder including sub-folders, `/folders` page; `tools/import_tree.py` imports a whole folder tree.
+- Taxonomy from the brief: eight types (incoming/outgoing letters, decisions, administrative forms, minutes,
+  contracts, invoices, technical reports) under four level-1 groups (administrative, financial, legal,
+  technical). The classifier scores both levels and can report a confident group with an uncertain type.
+  Existing archives are upgraded once: own defaults refreshed, unused old defaults deactivated, anything an
+  administrator created or a reviewer used is kept.
+- Metadata extraction (`rules-v1`): reference number, date (ISO; Hijri kept), sender, recipient, subject and
+  amount with page and span; reviewers correct values and corrections always win; append-only history;
+  protected fields flagged for the later constrained OCR correction.
+- Duplicates and versions (`fingerprint-v1`): identical bytes, near-identical text (MinHash of word 3-grams)
+  and versions sharing a reference number or subject; reviewers confirm or reject; nothing is merged.
+- New text (OCR or correction) triggers metadata extraction, a new category suggestion and relation checks.
+
 ## 0.9.0 — Sprint 4 / Task 009 (unreleased)
 - Backups: one zip with an online SQLite snapshot, every referenced original and a SHA-256 manifest; refused
   when an original is missing or damaged; verification re-hashes every member, checks database integrity and
