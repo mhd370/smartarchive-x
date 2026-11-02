@@ -14,7 +14,8 @@ extraction, classification suggestion and duplicate/version detection. Then:
 - Classification: accuracy of the suggested type and of the first level (group), coverage (non-abstentions),
   precision on the answered documents, and a confusion table.
 - Relations: precision/recall of suggested exact duplicates, near duplicates and versions (pairs, kind-aware).
-- Search: Recall@10, MRR@10 and nDCG@10 over the generated queries (subjects and reference numbers).
+- Search: Recall@10, MRR@10 and nDCG@10 over the generated queries (subjects and reference numbers), for the
+  ranked (default) and the exact mode.
 
 Interrupted runs resume with the same --work folder; --re-enrich re-scores new rules on the stored text. Results: report.json and report.md in the work folder.
 All numbers are on synthetic data and must be reported as such.
@@ -303,16 +304,21 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
 
     queries = [q for q in json.loads((corpus / 'queries.json').read_text(encoding='utf-8'))
                if set(q['relevant']) <= keep]
-    scored = []
-    for query in queries:
-        result = pipeline.texts.search(query['query'], 10, 0)
-        ranked = [back.get(item['document']['id']) for item in result['items']]
-        scored.append({'id': query['id'], 'kind': query['kind'], **retrieval(ranked, set(query['relevant']))})
-    search = {'queries': len(scored), 'method': 'substring-v1 (all terms, normalized)'}
-    for kind in ('all', 'subject', 'reference_number'):
-        items = [s for s in scored if kind == 'all' or s['kind'] == kind]
-        search[kind] = {'queries': len(items), 'recall@10': mean(s['recall'] for s in items),
-                        'mrr@10': mean(s['mrr'] for s in items), 'ndcg@10': mean(s['ndcg'] for s in items)}
+    from smartarchive.search.ranked import METHOD as ranked_method
+    search = {'queries': len(queries)}
+    for mode, run, method in (('ranked', pipeline.texts.search_ranked, ranked_method),
+                              ('exact', pipeline.texts.search, 'substring-v1 (all terms, normalized)')):
+        scored = []
+        for query in queries:
+            result = run(query['query'], 10, 0)
+            ranking = [back.get(item['document']['id']) for item in result['items']]
+            scored.append({'id': query['id'], 'kind': query['kind'], **retrieval(ranking, set(query['relevant']))})
+        block = {'method': method}
+        for kind in ('all', 'subject', 'reference_number'):
+            items = [s for s in scored if kind == 'all' or s['kind'] == kind]
+            block[kind] = {'queries': len(items), 'recall@10': mean(s['recall'] for s in items),
+                           'mrr@10': mean(s['mrr'] for s in items), 'ndcg@10': mean(s['ndcg'] for s in items)}
+        search[mode] = block
 
     report = {'corpus': str(corpus), 'generator': manifest.get('generator'), 'seed': manifest.get('seed'),
               'synthetic': True, 'documents': len(entries), 'pages': len(pages),
@@ -358,12 +364,12 @@ def markdown(report: dict) -> str:
         if kind == 'method':
             continue
         lines.append(f"| {kind} | {block['true']} | {block['suggested']} | {pct(block['precision'])} | {pct(block['recall'])} |")
-    lines += ['', f"## Search ({search['method']})", '', '| Queries | n | Recall@10 | MRR@10 | nDCG@10 |',
-              '|---|---|---|---|---|']
-    for kind in ('all', 'subject', 'reference_number'):
-        block = search[kind]
-        lines.append(f"| {kind} | {block['queries']} | {pct(block['recall@10'])} | {pct(block['mrr@10'])} | "
-                     f"{pct(block['ndcg@10'])} |")
+    lines += ['', '## Search', '', '| Mode | Queries | n | Recall@10 | MRR@10 | nDCG@10 |', '|---|---|---|---|---|---|']
+    for mode in ('ranked', 'exact'):
+        for kind in ('all', 'subject', 'reference_number'):
+            block = search[mode][kind]
+            lines.append(f"| {mode} ({search[mode]['method']}) | {kind} | {block['queries']} | {pct(block['recall@10'])} | "
+                         f"{pct(block['mrr@10'])} | {pct(block['ndcg@10'])} |")
     return '\n'.join(lines) + '\n'
 
 

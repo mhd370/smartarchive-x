@@ -137,6 +137,12 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 Sub-folders become archive folders; every file passes the same validation as a web upload; a report is written to `results\imports`.
 
+## Search (Sprint 7)
+
+`/search` and `GET /api/search` rank by relevance (`mode=ranked`, default): exact phrase matches, BM25 over light
+Arabic stems and character trigrams (tolerant of OCR misreadings) fused with RRF (ADR 0009). `mode=exact`
+requires every word. Indexes are derived from page texts and rebuilt automatically on start-up.
+
 ## Synthetic corpus and ground-truth evaluation (Sprint 6)
 
 No authorized institutional documents are available, so a documented synthetic corpus stands in (ADR 0008).

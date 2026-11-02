@@ -107,8 +107,9 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(fields['reference_number']['accuracy'], 1.0)
         self.assertEqual(fields['date']['accuracy'], 1.0)
         self.assertEqual(fields['amount']['accuracy'], 1.0)
-        self.assertEqual(report['search']['reference_number']['recall@10'], 1.0)
-        self.assertEqual(report['search']['subject']['recall@10'], 0.0)  # the OCR error breaks the exact subject
+        self.assertEqual(report['search']['exact']['reference_number']['recall@10'], 1.0)
+        self.assertEqual(report['search']['exact']['subject']['recall@10'], 0.0)  # an OCR error breaks the exact subject
+        self.assertEqual(report['search']['ranked']['subject']['recall@10'], 1.0)  # ranked search tolerates it
         self.assertEqual(report['classification']['documents'], 3)
         self.assertTrue((work / 'report.md').read_text(encoding='utf-8').startswith('# Synthetic evaluation'))
         again = ev.evaluate(corpus, work, engine_factory=QueueEngine, log=lambda *_: None,

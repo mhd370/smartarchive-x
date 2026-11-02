@@ -47,6 +47,12 @@ class ReviewApiTests(unittest.TestCase):
         hit = result['items'][0]
         self.assertEqual((hit['document']['id'], hit['pages'][0]['page_no'], hit['pages'][0]['source']), (doc_id, 1, 'ocr'))
         self.assertEqual([p['text'] for p in hit['pages'][0]['snippets'][0] if p['match']], ['إداري'])
+        self.assertEqual(result['mode'], 'ranked')
+        # Ranked mode still finds the page when one query word is not in it; exact mode needs every word.
+        self.assertEqual(viewer.get('/api/search', params={'q': 'اداري مفقود'}).json()['total'], 1)
+        exact = viewer.get('/api/search', params={'q': 'اداري مفقود', 'mode': 'exact'}).json()
+        self.assertEqual((exact['mode'], exact['total']), ('exact', 0))
+        self.assertEqual(viewer.get('/api/search', params={'q': 'x', 'mode': 'fuzzy'}).status_code, 422)
         self.assertEqual(viewer.get('/api/search', params={'q': ''}).status_code, 422)
         self.assertEqual(TestClient(self.app).get('/api/search', params={'q': 'قرار'}).status_code, 401)
 

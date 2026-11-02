@@ -4,14 +4,16 @@
 - `page_texts` holds the text that search and the UI use for each page: the latest human revision
   if one exists, otherwise the OCR text of the latest completed run. It is derived data and can be
   rebuilt from `ocr_lines` and `page_revisions` at any time.
-- Search compares normalized Arabic (see arabic.py) as substrings, so clitics such as و/ب/ال
-  attached to a word still match. Results are grouped per document and ranked by occurrences.
+- Exact search compares normalized Arabic (see arabic.py) as substrings, so clitics such as و/ب/ال
+  attached to a word still match; every term must occur. Ranked search (ranked.py) uses BM25 over stems and
+  character trigrams and tolerates OCR errors. Results are grouped per document.
 """
 import uuid
 
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
 from .arabic import find_spans, normalize, parse_query, snippets
+from . import ranked
 
 MAX_TEXT = 100_000
 MAX_NOTE = 500
@@ -38,6 +40,7 @@ class PageTexts:
                       revision=excluded.revision, text=excluded.text, normalized=excluded.normalized,
                       updated_at=excluded.updated_at''',
                    (document_id, page_no, source, run_id, revision, text, normalize(text), now()))
+        ranked.index_page(db, document_id, page_no, text)
 
     def index_run(self, db, run_id: str, document_id: str):
         """Make a completed run's OCR text searchable, except on pages a person has already corrected."""
@@ -58,6 +61,7 @@ class PageTexts:
             runs = db.execute(LATEST_READY + ' AND NOT EXISTS (SELECT 1 FROM page_texts t WHERE t.run_id=r.id)').fetchall()
             for run in runs:
                 self.index_run(db, run['id'], run['document_id'])
+            ranked.ensure_indexed(db)  # pages indexed before ranked search existed
             return len(runs)
 
     # -- reading ------------------------------------------------------------------------------
@@ -162,13 +166,57 @@ class PageTexts:
                 'limit': limit, 'offset': offset}
 
     # -- search -------------------------------------------------------------------------------
+    def _documents(self, db) -> dict[str, dict]:
+        return {row['id']: dict(row) for row in db.execute(
+            'SELECT d.*, v.category_id, v.state AS category_state, c.name AS category_name FROM documents d'
+            ' LEFT JOIN document_categories v ON v.document_id=d.id LEFT JOIN categories c ON c.id=v.category_id')}
+
+    def search_ranked(self, query: str, limit: int, offset: int, pages_per_document: int = 5,
+                      allowed: set[str] | None = None) -> dict:
+        """Ranked mode (ranked.py): any word may match, misread words still score; best page ranks the document."""
+        with self.db.connect() as db:
+            words, fused = ranked.search(db, query)
+            if not words:
+                return {'query': query, 'terms': [], 'items': [], 'total': 0, 'limit': limit, 'offset': offset,
+                        'truncated': False, 'mode': 'ranked', 'method': ranked.METHOD}
+            documents = self._documents(db)
+            per_document: dict[str, dict] = {}
+            for (document_id, page_no), score in fused.items():
+                if document_id not in documents or (allowed is not None and document_id not in allowed):
+                    continue
+                entry = per_document.setdefault(document_id, {'score': 0.0, 'pages': []})
+                entry['score'] = max(entry['score'], score)
+                entry['pages'].append((score, page_no))
+            for document_id, record in documents.items():  # a matching file name is evidence too
+                if (allowed is None or document_id in allowed) and all(w in normalize(record['filename']) for w in words):
+                    entry = per_document.setdefault(document_id, {'score': 0.0, 'pages': []})
+                    entry['score'] += 1.0 / (ranked.RRF_K + 1)
+                    entry['filename_match'] = True
+            order = sorted(per_document.items(), key=lambda item: (-item[1]['score'], documents[item[0]]['created_at']))
+            items = []
+            for document_id, entry in order[offset:offset + limit]:
+                pages = []
+                for score, page_no in sorted(entry['pages'], reverse=True)[:pages_per_document]:
+                    row = db.execute('SELECT source, revision, text FROM page_texts WHERE document_id=? AND page_no=?',
+                                     (document_id, page_no)).fetchone()
+                    spans = ranked.page_hits(row['text'], words)
+                    pages.append({'page_no': page_no, 'source': row['source'], 'revision': row['revision'],
+                                  'match_count': len(spans), 'score': round(score, 5),
+                                  'snippets': snippets(row['text'], spans)})
+                record = {k: v for k, v in documents[document_id].items() if k != 'storage_key'}
+                items.append({'document': record, 'score': round(entry['score'], 5),
+                              'filename_match': entry.get('filename_match', False),
+                              'matched_pages': len(entry['pages']), 'pages': pages})
+        return {'query': query, 'terms': words, 'items': items, 'total': len(order), 'limit': limit, 'offset': offset,
+                'truncated': False, 'mode': 'ranked', 'method': ranked.METHOD}
+
     def search(self, query: str, limit: int, offset: int, pages_per_document: int = 5,
                allowed: set[str] | None = None) -> dict:
-        """`allowed`, when given, limits results to these document ids (e.g. one category)."""
+        """Exact mode: every term must occur. `allowed` limits results to these document ids (e.g. one category)."""
         terms = parse_query(query)
         if not terms:
             return {'query': query, 'terms': [], 'items': [], 'total': 0, 'limit': limit, 'offset': offset,
-                    'truncated': False}
+                    'truncated': False, 'mode': 'exact'}
         where = ' AND '.join('t.normalized LIKE ? ESCAPE \'\\\'' for _ in terms)
         with self.db.connect() as db:
             rows = db.execute('SELECT t.document_id, t.page_no, t.source, t.revision, t.text FROM page_texts t'
@@ -194,13 +242,13 @@ class PageTexts:
         if allowed is not None:
             hits = {key: value for key, value in hits.items() if key in allowed}
         newest_first = sorted(hits.items(), key=lambda item: documents[item[0]]['created_at'], reverse=True)
-        ranked = sorted(newest_first, key=lambda item: -item[1]['score'])
+        order = sorted(newest_first, key=lambda item: -item[1]['score'])
         items = []
-        for document_id, entry in ranked[offset:offset + limit]:
+        for document_id, entry in order[offset:offset + limit]:
             record = {k: v for k, v in documents[document_id].items() if k != 'storage_key'}
             pages = sorted(entry['pages'], key=lambda page: (-page['match_count'], page['page_no']))
             items.append({'document': record, 'score': entry['score'], 'filename_match': entry.get('filename_match', False),
                           'matched_pages': len(pages), 'pages': pages[:pages_per_document]})
-        return {'query': query, 'terms': terms, 'items': items, 'total': len(ranked), 'limit': limit,
-                'offset': offset, 'truncated': truncated}
+        return {'query': query, 'terms': terms, 'items': items, 'total': len(order), 'limit': limit,
+                'offset': offset, 'truncated': truncated, 'mode': 'exact'}
 

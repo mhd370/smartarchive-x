@@ -1,4 +1,4 @@
-# Synthetic evaluation results (Sprint 6)
+# Synthetic evaluation results (Sprints 6–7)
 
 All numbers are on **synthetic** documents (ADR 0008) and must be reported as such. Tesseract 5.5.3. Metric
 policy `normalized-v1`: diacritics and tatweel ignored on both sides. Reproduce with the commands in the README.
@@ -77,3 +77,15 @@ fingerprint-v2). Nothing was tuned on it.
 The test numbers are within about 1.5 points of the development set (CER 27.5% vs 26.1%, metadata 26.7% vs
 28.6%), so the rule changes did not overfit corpus_v1. The ranking of weaknesses is the same: Arabic-Indic
 digits, severe scans and table reading order.
+
+## Sprint 7: ranked search (development set, same OCR text, `ara+eng`)
+
+| Search mode | Recall@10 | MRR@10 | nDCG@10 | Subjects R@10 | Reference numbers R@10 |
+|---|---|---|---|---|---|
+| exact (substring-v1, every word) | 44.2% | 30.9% | 33.3% | 55.2% | 12.2% |
+| BM25 stems + trigrams (no exact ranking) | 51.6% | 28.5% | 33.2% | 58.4% | 31.7% |
+| **hybrid-rrf-v1** (exact + BM25 stems + trigrams) | **54.2%** | **33.4%** | **37.7%** | **62.3%** | **30.5%** |
+
+BM25 alone raised recall but lowered MRR: many documents share most subject words, and only the whole-phrase
+signal separates them. Adding the exact ranking to the fusion recovered and exceeded the old MRR. The exact
+mode stays available. The test-set confirmation runs with the next full evaluation.

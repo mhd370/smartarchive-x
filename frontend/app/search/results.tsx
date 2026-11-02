@@ -14,17 +14,20 @@ const PAGE_SIZE = 20;
 export default function SearchResults() {
   const params = useSearchParams(), router = useRouter();
   const query = (params.get("q") || "").trim(), category = params.get("category") || "";
+  const mode = params.get("mode") === "exact" ? "exact" : "ranked";
   const categories = useApi<{ items: Category[] }>("/categories");
   const parsed = Number(params.get("offset") || 0), offset = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
   const [input, setInput] = useState(query);
   useEffect(() => { setInput(query); }, [query]);
   const request = new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) });
   if (category) request.set("category", category);
+  if (mode === "exact") request.set("mode", "exact");
   const resource = useApi<SearchResult>(query ? `/search?${request}` : null);
 
-  function go(q: string, at = 0, cat = category) {
+  function go(q: string, at = 0, cat = category, how: string = mode) {
     const next = new URLSearchParams({ q });
     if (cat) next.set("category", cat);
+    if (how === "exact") next.set("mode", "exact");
     if (at) next.set("offset", String(at));
     router.push(`/search?${next}`);
   }
@@ -32,7 +35,8 @@ export default function SearchResults() {
 
   return <>
     <div className="page-heading"><div><span className="eyebrow">البحث</span><h1>البحث في نصوص المستندات</h1>
-      <p>يبحث في النص المستخرج والمصحَّح لكل صفحة وفي أسماء الملفات، ويتجاهل اختلاف الهمزات والتاء المربوطة والتشكيل.</p></div></div>
+      <p>يبحث في النص المستخرج والمصحَّح لكل صفحة وفي أسماء الملفات، ويتجاهل اختلاف الهمزات والتاء المربوطة والتشكيل.
+        البحث الذكي يرتّب النتائج حسب الصلة ويجد الكلمة رغم السوابق واللواحق وأخطاء القراءة الآلية.</p></div></div>
     <section className="panel">
       <form className="filter-bar" onSubmit={submit} role="search">
         <div className="table-search search-box"><Icon name="search" />
@@ -41,9 +45,12 @@ export default function SearchResults() {
         <select aria-label="تصفية التصنيف" value={category} onChange={e => go(query || input.trim(), 0, e.target.value)}>
           <option value="">جميع التصنيفات</option>
           {categories.data?.items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <select aria-label="طريقة البحث" value={mode} onChange={e => go(query || input.trim(), 0, category, e.target.value)}>
+          <option value="ranked">بحث ذكي (حسب الصلة)</option>
+          <option value="exact">كل الكلمات حرفيًا</option></select>
       </form>
       {!query ? <div className="empty-state"><div className="empty-icon"><Icon name="search" /></div><h3>ابحث داخل المستندات</h3>
-        <p>اكتب كلمة أو أكثر؛ تظهر المستندات التي تحتوي جميع الكلمات مع مقاطع منها والصفحة التي وردت فيها.</p></div>
+        <p>اكتب كلمة أو أكثر؛ تظهر المستندات الأقرب أولًا مع مقاطع منها والصفحة التي وردت فيها. لاشتراط كل الكلمات اختر «كل الكلمات حرفيًا».</p></div>
         : resource.loading ? <Loading label="جار البحث…" /> : resource.error ? <Failure message={resource.error} retry={resource.reload} />
         : resource.data && <>
           <div className="search-summary">
@@ -76,7 +83,7 @@ function Result({ item }: { item: SearchItem }) {
       <div className="page-hit-head">
         <Link className="text-link" href={`/documents/${doc.id}?page=${page.page_no}`}>الصفحة {number(page.page_no)}<Icon name="arrow" /></Link>
         <span className={`source-tag source-${page.source}`}>{sources[page.source]}</span>
-        <span className="muted">{number(page.match_count)} تطابق</span>
+        <span className="muted">{page.match_count ? `${number(page.match_count)} تطابق` : "تطابق تقريبي"}</span>
       </div>
       {page.snippets.map((parts, index) => <p key={index} className="snippet" dir="auto">
         {parts.map((part, i) => part.match ? <mark key={i}>{part.text}</mark> : <span key={i}>{part.text}</span>)}</p>)}
