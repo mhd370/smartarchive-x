@@ -5,7 +5,10 @@
   the same letter scanned twice or saved as PDF and as image.
 - version_of: related text below the near-duplicate level that shares the same reference number (similarity
   >= 0.25, e.g. a letter re-issued under the same number with a new body) or the same subject (>= 0.45),
-  e.g. an amended contract or a corrected decision.
+  e.g. an amended contract or a corrected decision. A reference number only links documents when it has at
+  least four digits: OCR often truncates numbers (ع/٤٥٦/٢٠٢٤ read as «ع/4»), and those fragments are shared by
+  unrelated documents (synthetic evaluation, Sprint 6: all 20 false version suggestions came from them).
+  Only labelled or human-entered values link documents, never a subject guessed from a title.
 
 Relations are suggestions until a reviewer confirms or rejects them. Nothing is merged or deleted.
 """
@@ -19,10 +22,12 @@ from smartarchive.persistence.database import Database, now
 from smartarchive.search.arabic import normalize
 
 log = logging.getLogger(__name__)
-METHOD = 'fingerprint-v1'
+METHOD = 'fingerprint-v2'
 PERMUTATIONS = 64
 PRIME = (1 << 61) - 1
 MIN_SHINGLES = 15
+MIN_REFERENCE_DIGITS = 4
+LINKING_CONFIDENCE = 0.8
 NEAR, VERSION_SAME_REFERENCE, VERSION_SAME_SUBJECT = 0.85, 0.25, 0.45
 _COEFFICIENTS = [(int.from_bytes(hashlib.sha256(f'a{i}'.encode()).digest()[:8], 'big') % PRIME | 1,
                   int.from_bytes(hashlib.sha256(f'b{i}'.encode()).digest()[:8], 'big') % PRIME)
@@ -37,6 +42,11 @@ def shingles(text: str, size: int = 3) -> set[int]:
 
 def minhash(values: set[int]) -> list[int]:
     return [min((a * value + b) % PRIME for value in values) for a, b in _COEFFICIENTS]
+
+
+def identifying(reference: str | None) -> bool:
+    """A reference number specific enough to link two documents (at least four digits)."""
+    return bool(reference) and sum(ch.isdigit() for ch in reference) >= MIN_REFERENCE_DIGITS
 
 
 def similarity(left: list[int], right: list[int]) -> float:
@@ -65,7 +75,7 @@ class Relations:
     def detect(self, document_id: str) -> list[dict]:
         """Fingerprint the document and suggest relations to every other archived document."""
         mine = self.fingerprint(document_id)
-        own_meta = self.metadata.values(document_id) if self.metadata else {}
+        own_meta = self._linking_values(document_id)
         with self.db.connect() as db:
             others = db.execute('SELECT * FROM document_fingerprints WHERE document_id<>?', (document_id,)).fetchall()
         found = []
@@ -79,9 +89,10 @@ class Relations:
             if score >= NEAR:
                 found.append((other['document_id'], 'near_duplicate', score, {'text_similarity': score}))
             elif score >= VERSION_SAME_REFERENCE and self.metadata:
-                theirs = self.metadata.values(other['document_id'])
+                theirs = self._linking_values(other['document_id'])
                 shared = [field for field in ('reference_number', 'subject')
-                          if own_meta.get(field) and own_meta.get(field) == theirs.get(field)]
+                          if own_meta.get(field) and own_meta.get(field) == theirs.get(field)
+                          and (field != 'reference_number' or identifying(own_meta[field]))]
                 if ('reference_number' in shared) or ('subject' in shared and score >= VERSION_SAME_SUBJECT):
                     found.append((other['document_id'], 'version_of', score,
                                   {'text_similarity': score, 'shared_fields': shared}))
@@ -99,6 +110,15 @@ class Relations:
                            list(relation.values()))
                 created.append(relation)
         return created
+
+    def _linking_values(self, document_id: str) -> dict[str, str]:
+        """Values trusted enough to link documents: entered by a person, or extracted from a labelled field
+        (confidence >= 0.8). A subject guessed from a title («عقد توريد لمشروع ...») is shared by many documents."""
+        if not self.metadata:
+            return {}
+        fields = self.metadata.get(document_id)['fields']
+        return {name: item['normalized'] for name, item in fields.items() if item['normalized'] and
+                (item['source'] == 'human' or (item['confidence'] or 0) >= LINKING_CONFIDENCE)}
 
     def detect_quietly(self, document_id: str):
         try:

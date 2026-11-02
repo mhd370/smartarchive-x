@@ -137,7 +137,22 @@ The first compares pre-audit hashes of experimental sources, inputs and results;
 
 Sub-folders become archive folders; every file passes the same validation as a web upload; a report is written to `results\imports`.
 
-## Next engineering task
+## Synthetic corpus and ground-truth evaluation (Sprint 6)
+
+No authorized institutional documents are available, so a documented synthetic corpus stands in (ADR 0008).
+Report every number from it as synthetic.
+
+```powershell
+.\.venv\Scripts\python.exe tools/fetch_ocr_models.py          # pinned models incl. script/Arabic (all Arabic-Indic digits)
+.\.venv\Scripts\python.exe tools/synth_corpus.py --documents 420 --seed 2026 --out data\synthetic\corpus_v1   # development
+.\.venv\Scripts\python.exe tools/synth_corpus.py --documents 520 --seed 7351 --out data\synthetic\corpus_v2   # held-out test
+.\.venv\Scripts\python.exe tools/evaluate_synthetic.py data\synthetic\corpus_v1 --languages script/Arabic+ara --tessdata models\tessdata
+.\.venv\Scripts\python.exe tools/evaluate_synthetic.py data\synthetic\corpus_v1 --re-enrich   # new rules, stored OCR text
+```
+
+The evaluation never touches the real archive: it builds a throw-away one under `results\synthetic_eval\`
+and writes `report.json` and `report.md` there. Rules are changed only after looking at `corpus_v1`; `corpus_v2`
+is used once, to report.
 
 ## Operations and evaluation (Sprint 4)
 

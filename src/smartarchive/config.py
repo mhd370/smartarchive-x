@@ -30,9 +30,14 @@ class Settings:
     # OCR processing. Thresholds are initial engineering values, tuned later on validation data.
     tesseract_cmd: str | None = None
     ocr_languages: str = 'ara+eng'
+    # Folder of .traineddata files used instead of Tesseract's own (tools/fetch_ocr_models.py fills
+    # models/tessdata with pinned, hash-checked models, including script/Arabic for Arabic-Indic digits).
+    tessdata_dir: Path | None = None
     ocr_auto: bool = True
     ocr_worker: bool = True
-    ocr_dpi: int = 300
+    # PDF pages are rendered at this resolution for OCR. 200 beat 300 on the synthetic development corpus
+    # (born-digital CER 12.9% vs 17.1% with script/Arabic+ara; ADR 0008).
+    ocr_dpi: int = 200
     ocr_page_timeout_seconds: int = 120
     review_confidence_threshold: float = 0.60
     quality_weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)
@@ -58,5 +63,8 @@ class Settings:
                    secure_cookies=flag('SMARTARCHIVE_SECURE_COOKIES', 'false'),
                    tesseract_cmd=os.getenv('SMARTARCHIVE_TESSERACT_CMD') or None,
                    ocr_languages=os.getenv('SMARTARCHIVE_OCR_LANGUAGES', 'ara+eng'),
+                   ocr_dpi=int(os.getenv('SMARTARCHIVE_OCR_DPI', '200')),
+                   tessdata_dir=Path(os.environ['SMARTARCHIVE_TESSDATA_DIR']).resolve()
+                   if os.getenv('SMARTARCHIVE_TESSDATA_DIR') else None,
                    ocr_auto=flag('SMARTARCHIVE_OCR_AUTO', 'true'),
                    ocr_worker=flag('SMARTARCHIVE_OCR_WORKER', 'true'))

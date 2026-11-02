@@ -1,4 +1,5 @@
 .venv/
+.venv-ocr/
 venv/
 __pycache__/
 *.py[cod]
@@ -23,6 +24,8 @@ dist/
 /results/**
 !/data/input/.gitkeep
 !/data/ground_truth/.gitkeep
+# Generated synthetic corpora (reproducible from tools/synth_corpus.py and its seed)
+/data/synthetic/**
 !/results/.gitkeep
 
 # Proposed runtime storage, not implemented.
@@ -40,3 +43,4 @@ node_modules/
 /frontend/test-results/
 /frontend/next-env.d.ts
 !/frontend/.env.example
+/models/tessdata/

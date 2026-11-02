@@ -89,6 +89,21 @@ class MetadataTests(Base):
         self.assertEqual(invoice['amount'].normalized, '1,250.50 دينار')
         self.assertEqual(extract([(1, 'نص بلا بيانات')]), {})
 
+    def test_ocr_artifacts_and_unlabelled_subjects(self):
+        # Rules-v2 cases found on OCR output of the synthetic corpus (Sprint 6).
+        reversed_label = extract([(1, 'الشؤون الإدارية\n١٥/٠٣/٢٠٢٦ التاريخ:\u200e\nانعقد اجتماع اللجنة')])
+        self.assertEqual(reversed_label['date'].normalized, '2026-03-15')
+        decision = extract([(1, 'مكتب المدير العام\nقرار إداري بشأن تشكيل لجنة لمتابعة مشروع الصيانة\nإن المدير العام')])
+        self.assertEqual(decision['subject'].value, 'تشكيل لجنة لمتابعة مشروع الصيانة')
+        self.assertLess(decision['subject'].confidence, 0.9)
+        labelled = extract([(1, 'الموضوع: طلب بيانات المشروع\nتقرير فني حول سير العمل')])
+        self.assertEqual(labelled['subject'].value, 'طلب بيانات المشروع')  # a label beats a title
+        body = extract([(1, 'من شركة الفرات للخدمات الهندسية إضافة إلى مقابلات\nإلى؛ مديرية الخدمات العامة')])
+        self.assertNotIn('sender', body)  # a wrapped body line starting with «من» is not a sender
+        self.assertEqual(body['recipient'].value, 'مديرية الخدمات العامة')  # «؛» is a misread colon
+        invoice = extract([(1, 'الصنف المجموع\nالمجموع: ٤,٩٢٣ دينار\nالإجمالي: ٥,٤١٥ دينار')])
+        self.assertEqual(invoice['amount'].normalized, '5,415 دينار')
+
     def test_dates(self):
         self.assertEqual(normalize_date('١٤٤٧/٩/١٢ هـ'), ('1447/9/12', 'hijri'))
         self.assertEqual(normalize_date('2026-02-01'), ('2026-02-01', 'gregorian'))
@@ -154,6 +169,22 @@ class RelationTests(Base):
             relations.review(relation['id'], 'confirmed', 'reviewer1')
         self.assertIn('relation.confirmed', [e['action'] for e in self.db.events(original)])
         self.assertEqual(relations.ensure_fingerprinted(), 0)
+
+    def test_truncated_reference_numbers_do_not_link_documents(self):
+        # OCR fragments such as «ع/4» are shared by unrelated contracts; only a number with 4+ digits links.
+        metadata = Metadata(self.db)
+        relations = Relations(self.db, metadata)
+        body = ('عقد توريد لمشروع صيانة المباني الحكومية بين الطرفين وفق الشروط العامة والخاصة المعتمدة لدى '
+                'المديرية على أن يلتزم الطرف الثاني بالتوريد خلال المدة المحددة وبالمواصفات المطلوبة ')
+        first = self.document('رقم العقد: ع/4\n' + body + 'الموقع الأول في المنطقة الشمالية من المحافظة')
+        second = self.document('رقم العقد: ع/4\n' + body + 'الموقع الثاني في المنطقة الجنوبية بعد التعديل')
+        for doc in (first, second):
+            metadata.run(doc)
+            relations.detect(doc)
+        self.assertFalse([r for r in relations.of(first) if r['kind'] == 'version_of'])
+        from smartarchive.enrichment.duplicates import identifying
+        self.assertTrue(identifying('ع/456/2024'))
+        self.assertFalse(identifying('ع/4'))
 
 
 if __name__ == '__main__':

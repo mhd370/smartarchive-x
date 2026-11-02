@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.11.0 — Sprint 6 / Task 011 (unreleased)
+- Synthetic institutional corpus (`tools/synth_corpus.py`, ADR 0008): the brief's eight types rendered as
+  real PDFs with correct right-to-left Arabic (paragraphs, two-column pages read right column first, tables),
+  signatures and stamps. Part of the corpus is turned into scans degraded with the project's seeded levels.
+  Ground truth is exact: page text in reading order, block types and boxes, metadata, type and group, plus
+  duplicates, near-duplicates and versions. Search queries come with their relevant documents.
+  Development set `corpus_v1` (seed 2026); held-out test set `corpus_v2` (seed 7351).
+- Ground-truth evaluation (`tools/evaluate_synthetic.py`): imports a corpus into a throw-away archive and runs
+  the real pipeline. Scores OCR CER/WER by quality level and layout, metadata per field (exact match and value
+  CER), classification (accuracy, coverage, group), duplicates/versions (precision/recall per kind) and search
+  (Recall@10, MRR@10, nDCG@10). Resumable; `--re-enrich` re-scores new rules without new OCR.
+- OCR fix: on shaded scans the global threshold counted the dark side of the paper as ink. A 3° tilt was
+  measured as 10.5°, and the wrong deskew destroyed the page. Ink is now found on an illumination-flattened
+  page. Uneven or low-contrast pages are flattened before OCR (division by the estimated paper background,
+  per channel, no binarisation; recorded as step `illumination`).
+- OCR models: `ara` knows only ٠ and ١ of the Arabic-Indic digits. `tools/fetch_ocr_models.py` installs
+  pinned, hash-checked tessdata_fast models, including `script/Arabic`, which has all of them.
+  `SMARTARCHIVE_TESSDATA_DIR`, `SMARTARCHIVE_OCR_DPI`; languages under a `script/` folder are detected
+  correctly (pytesseract's list dropped them and cached the first answer).
+- Metadata `rules-v2`:
+  - A bare «من»/«إلى» needs a colon (OCR often reads it as «؛»).
+  - Amounts prefer the grand total.
+  - A date may come after its label on mixed-direction lines.
+  - Untitled subjects are taken from «قرار ... بشأن ...», contract, report or minutes titles.
+  - Direction marks are ignored.
+  - Value CER per field is reported.
+- Document page: when processing ended, the run summary could stay on "processing" because its last poll
+  came before the run was ready; it is now fetched once more when processing ends (found by the browser test).
+- `tools/ocr_engine_probe.py`: compares OCR engines (PaddleOCR, EasyOCR, Tesseract) on the development set
+  in a separate environment, with the archive's own preprocessing.
+- Relations `fingerprint-v2`: reference numbers link documents only with four or more digits, since OCR
+  fragments like «ع/4» caused every false version suggestion. Only labelled or human-entered values link
+  documents.
+
 ## 0.10.0 — Sprint 5 / Task 010 (unreleased)
 - `docs/dean_requirements.md`: the dean's brief verbatim with a requirement-by-requirement status table.
 - Folders: tree with document counts, upload into a folder, move (audited `document.filed`), filter documents

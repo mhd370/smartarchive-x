@@ -1,4 +1,9 @@
-"""Rule-based extraction of archival metadata (`rules-v1`) with human correction.
+"""Rule-based extraction of archival metadata (`rules-v2`) with human correction.
+
+v2 (Sprint 6, from the synthetic evaluation): a bare «من»/«إلى» label needs a colon; amounts prefer the grand
+total over a subtotal or a table heading; a date may follow its value on mixed-direction lines; without a
+«الموضوع» label the title of a decision («قرار ... بشأن ...»), contract, report or minutes gives the subject
+(confidence 0.6-0.65); invisible direction marks inserted by OCR are ignored.
 
 Fields: reference_number, date, sender, recipient, subject, amount. Each value keeps the page, the character
 span in that page's text and a confidence: labelled values ("الموضوع: ...", "رقم الكتاب: ...") score 0.9,
@@ -17,7 +22,7 @@ from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
 
 log = logging.getLogger(__name__)
-METHOD = 'rules-v1'
+METHOD = 'rules-v2'
 SYSTEM = 'system:metadata'
 FIELDS = ('reference_number', 'date', 'sender', 'recipient', 'subject', 'amount')
 # Values a constrained OCR corrector must never change automatically (project brief, section 12).
@@ -27,30 +32,45 @@ DIGITS = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '012345678901
 D = r'[0-9٠-٩۰-۹]'
 SEP = r'\s*[:：\-–/]?\s*'
 END = r'[^\n]{2,160}'
+LABEL_COLON = r'[:：؛]'
+AMOUNT = (r'[^\n0-9٠-٩۰-۹]{0,25}([0-9٠-٩۰-۹][0-9٠-٩۰-۹,\.٬٫]*\s*'
+          r'(?:دينار|ريال|دولار|جنيه|درهم|ليرة|يورو)?)')
 MONTHS = {name: number for number, names in enumerate([
     ('يناير', 'كانون الثاني', 'كانون ثاني'), ('فبراير', 'شباط'), ('مارس', 'آذار', 'اذار'), ('أبريل', 'ابريل', 'نيسان'),
     ('مايو', 'أيار', 'ايار'), ('يونيو', 'حزيران'), ('يوليو', 'تموز'), ('أغسطس', 'اغسطس', 'آب', 'اب'),
     ('سبتمبر', 'أيلول', 'ايلول'), ('أكتوبر', 'اكتوبر', 'تشرين الأول', 'تشرين الاول'),
     ('نوفمبر', 'تشرين الثاني', 'تشرين ثاني'), ('ديسمبر', 'كانون الأول', 'كانون الاول')], 1) for name in names}
 MONTH_ALT = '|'.join(sorted(map(re.escape, MONTHS), key=len, reverse=True))
+DATE = rf'{D}{{1,4}}\s*[/\-\.]\s*{D}{{1,2}}\s*[/\-\.]\s*{D}{{1,4}}(?:\s*هـ)?|{D}{{1,2}}\s+(?:{MONTH_ALT})\s+{D}{{4}}'
+# Invisible direction marks that OCR inserts around numbers; replaced by spaces so offsets stay valid.
+BIDI_MARKS = {code: ' ' for code in (0x200E, 0x200F, 0x061C, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E, 0x2066, 0x2067,
+                                     0x2068, 0x2069)}
 
 PATTERNS = {
-    'subject': [(re.compile(rf'(?:^|\n)\s*(?:ال)?موضوع{SEP}({END})'), 0.9)],
+    'subject': [(re.compile(rf'(?:^|\n)\s*(?:ال)?موضوع{SEP}({END})'), 0.9),
+                # No «الموضوع:» label: the title of a decision, contract, report or minutes states it.
+                (re.compile(r'(?:^|\n)[ \t]*(?:قرار[^\n]{0,40}?بشأن\s+|بشأن\s+)([^\n]{6,160})'), 0.65),
+                (re.compile(r'(?:^|\n)[ \t]*((?:عقد|محضر اجتماع|تقرير فني|تقرير)\s[^\n]{6,150})'), 0.6)],
     'reference_number': [
         (re.compile(rf'(?:رقم\s*(?:الكتاب|القرار|العقد|الفاتورة|الصادر|الوارد|القيد|المرجع|المعاملة|النموذج)|'
                     rf'الرقم|المرجع|الإشارة|الاشارة|Ref\.?|No\.?){SEP}'
                     rf'((?:[A-Za-z\u0621-\u064A]{{1,6}}\s?[/\-\.]\s?)?{D}[{D[1:-1]}/\-\.A-Za-z\u0621-\u064A]{{0,30}})'), 0.9)],
     'date': [
         (re.compile(rf'(?:التاريخ|تاريخ(?:\s*(?:الكتاب|القرار|العقد|الفاتورة|الورود|الصدور|التحرير))?|Date){SEP}'
-                    rf'({D}{{1,4}}\s*[/\-\.]\s*{D}{{1,2}}\s*[/\-\.]\s*{D}{{1,4}}(?:\s*هـ)?|{D}{{1,2}}\s+(?:{MONTH_ALT})\s+{D}{{4}})'),
-         0.9),
+                    rf'({DATE})'), 0.9),
+        # Mixed-direction lines: OCR can put the value before its label («١٥/٠٣/٢٠٢٦ التاريخ:»).
+        (re.compile(rf'(?:^|\n)[ \t]*({DATE})[ \t]+ا?لتاريخ[ \t]*[:：؛]?[ \t]*(?=\n|$)'), 0.85),
         (re.compile(rf'(?<![0-9٠-٩])({D}{{1,2}}\s*[/\-\.]\s*{D}{{1,2}}\s*[/\-\.]\s*{D}{{4}}(?:\s*هـ)?|{D}{{4}}-{D}{{2}}-{D}{{2}}|'
                     rf'{D}{{1,2}}\s+(?:{MONTH_ALT})\s+{D}{{4}})'), 0.6)],
-    'sender': [(re.compile(rf'(?:^|\n)\s*(?:من|المرسل|صادر عن|الجهة المرسلة){SEP}({END})'), 0.9)],
-    'recipient': [(re.compile(rf'(?:^|\n)\s*(?:إلى|الى|المرسل إليه|المرسل اليه){SEP}({END})'), 0.9),
+    # A bare «من» / «إلى» needs a colon (OCR often reads it as «؛»): wrapped body lines also start with them.
+    'sender': [(re.compile(rf'(?:^|\n)\s*(?:(?:المرسل|صادر عن|الجهة المرسلة){SEP}|من\s*{LABEL_COLON}\s*)({END})'), 0.9)],
+    'recipient': [(re.compile(rf'(?:^|\n)\s*(?:(?:المرسل إليه|المرسل اليه){SEP}|(?:إلى|الى)\s*{LABEL_COLON}\s*)({END})'), 0.9),
                   (re.compile(r'(?:^|\n)\s*(?:السيد|السيدة|حضرة)\s*/?\s*([^\n]{2,120}?)\s*(?:المحترم|المحترمة)'), 0.75)],
-    'amount': [(re.compile(rf'(?:المبلغ|الإجمالي|الاجمالي|المجموع|إجمالي|اجمالي)[^\n0-9٠-٩]{{0,25}}'
-                           rf'({D}[{D[1:-1]},\.٬٫]*\s*(?:دينار|ريال|دولار|جنيه|درهم|ليرة|يورو)?)'), 0.85)],
+    # Grand total first, then a stated amount, then any sum (an invoice's «المجموع» is often a subtotal or
+    # a table column heading).
+    'amount': [(re.compile(rf'(?:{label}){AMOUNT}'), confidence) for label, confidence in (
+        ('المبلغ الإجمالي|المبلغ الاجمالي|الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع الكلي', 0.9),
+        ('المبلغ', 0.85), ('المجموع', 0.7))],
 }
 
 
@@ -99,6 +119,7 @@ def extract(pages: list[tuple[int, str]]) -> dict[str, Found]:
     for field, patterns in PATTERNS.items():
         best = None
         for page_no, text in pages:
+            text = text.translate(BIDI_MARKS)
             for pattern, confidence in patterns:
                 match = pattern.search(text)
                 if match and (best is None or confidence > best.confidence):
