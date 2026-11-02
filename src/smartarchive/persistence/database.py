@@ -88,21 +88,30 @@ class Database:
             row = db.execute('SELECT * FROM documents WHERE id=?', (document_id,)).fetchone()
             return dict(row) if row else None
 
-    def list(self, query: str, status: str | None, kind: str | None, limit: int, offset: int):
+    def list(self, query: str, status: str | None, kind: str | None, limit: int, offset: int,
+             category: str | None = None):
         clauses, values = [], []
         if query:
             literal = query.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-            clauses.append("filename LIKE ? ESCAPE '\\'")
+            clauses.append("d.filename LIKE ? ESCAPE '\\'")
             values.append('%' + literal + '%')
         if status:
-            clauses.append('status=?')
+            clauses.append('d.status=?')
             values.append(status)
         if kind:
-            clauses.append("mime_type='application/pdf'" if kind == 'pdf' else "mime_type LIKE 'image/%'")
+            clauses.append("d.mime_type='application/pdf'" if kind == 'pdf' else "d.mime_type LIKE 'image/%'")
+        if category == 'none':
+            clauses.append('v.category_id IS NULL')
+        elif category:
+            clauses.append('v.category_id=?')
+            values.append(category)
+        source = ' FROM documents d LEFT JOIN document_categories v ON v.document_id=d.id' \
+                 ' LEFT JOIN categories c ON c.id=v.category_id'
         where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
         with self.connect() as db:
-            total = db.execute('SELECT COUNT(*) FROM documents' + where, values).fetchone()[0]
-            rows = db.execute('SELECT * FROM documents' + where + ' ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?',
+            total = db.execute('SELECT COUNT(*)' + source + where, values).fetchone()[0]
+            rows = db.execute('SELECT d.*, v.category_id, v.state AS category_state, c.name AS category_name' + source +
+                              where + ' ORDER BY d.created_at DESC, d.id DESC LIMIT ? OFFSET ?',
                               [*values, limit, offset]).fetchall()
             return {'items': [dict(row) for row in rows], 'total': total, 'limit': limit, 'offset': offset}
 
@@ -184,4 +193,38 @@ MIGRATIONS = [(2, '''
         revision INTEGER, text TEXT NOT NULL, normalized TEXT NOT NULL, updated_at TEXT NOT NULL,
         PRIMARY KEY(document_id, page_no)
     );
+'''),
+    # Sprint 3: categories, append-only classification history and each document's current category.
+    (4, '''
+    CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT NOT NULL, keywords TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)), created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS classifications (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        document_id TEXT NOT NULL REFERENCES documents(id),
+        kind TEXT NOT NULL CHECK(kind IN ('suggestion','decision')),
+        category_id TEXT REFERENCES categories(id), confidence REAL, method TEXT NOT NULL,
+        scores TEXT, evidence TEXT, basis TEXT NOT NULL, reason TEXT NOT NULL, actor TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        CHECK(kind='suggestion' OR category_id IS NOT NULL)
+    );
+    CREATE INDEX IF NOT EXISTS classifications_document ON classifications(document_id, kind, sequence);
+    CREATE TRIGGER IF NOT EXISTS classifications_no_update BEFORE UPDATE ON classifications
+        BEGIN SELECT RAISE(ABORT,'classifications are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS classifications_no_delete BEFORE DELETE ON classifications
+        BEGIN SELECT RAISE(ABORT,'classifications are append-only'); END;
+    CREATE VIEW IF NOT EXISTS document_categories AS
+    SELECT d.id AS document_id,
+           CASE WHEN dec.sequence IS NOT NULL THEN dec.category_id ELSE sug.category_id END AS category_id,
+           CASE WHEN dec.sequence IS NOT NULL THEN 'confirmed'
+                WHEN sug.category_id IS NOT NULL THEN 'suggested'
+                WHEN sug.sequence IS NOT NULL THEN 'uncertain' ELSE 'none' END AS state,
+           CASE WHEN dec.sequence IS NOT NULL THEN NULL ELSE sug.confidence END AS confidence
+    FROM documents d
+    LEFT JOIN classifications dec ON dec.sequence = (SELECT MAX(sequence) FROM classifications
+        WHERE document_id=d.id AND kind='decision')
+    LEFT JOIN classifications sug ON sug.sequence = (SELECT MAX(sequence) FROM classifications
+        WHERE document_id=d.id AND kind='suggestion');
 ''')]

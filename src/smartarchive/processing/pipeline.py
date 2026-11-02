@@ -31,6 +31,7 @@ class OcrService:
                  engine_factory: Callable[[], Engine] | None = None, texts=None):
         self.db, self.store, self.settings = db, store, settings
         self.texts = texts  # PageTexts: makes completed runs searchable in the same transaction
+        self.on_ready: Callable[[str], None] | None = None  # called with the document id after a run completes
         self._factory = engine_factory
         self._engine: Engine | None = None
         self._engine_error: str | None = None
@@ -174,6 +175,8 @@ class OcrService:
             self.db._event(db, run['document_id'], 'ocr.completed',
                            {'run_id': run['id'], 'mean_confidence': overall, 'review_required': review,
                             'pages': len(page_results), 'characters': total}, SYSTEM)
+        if self.on_ready:
+            self.on_ready(run['document_id'])
 
     # -- reads --------------------------------------------------------------------------------
     def run(self, run_id: str) -> dict:

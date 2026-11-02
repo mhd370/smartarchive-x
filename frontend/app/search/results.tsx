@@ -3,24 +3,28 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { SearchItem, SearchResult } from "@/lib/api";
+import type { Category, SearchItem, SearchResult } from "@/lib/api";
 import { useApi } from "@/lib/use-api";
 import { date, number, sources } from "@/lib/format";
 import { Icon } from "@/components/icons";
-import { Failure, FileSymbol, Loading, StatusBadge } from "@/components/ui";
+import { CategoryBadge, Failure, FileSymbol, Loading, StatusBadge } from "@/components/ui";
 
 const PAGE_SIZE = 20;
 
 export default function SearchResults() {
   const params = useSearchParams(), router = useRouter();
-  const query = (params.get("q") || "").trim();
+  const query = (params.get("q") || "").trim(), category = params.get("category") || "";
+  const categories = useApi<{ items: Category[] }>("/categories");
   const parsed = Number(params.get("offset") || 0), offset = Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
   const [input, setInput] = useState(query);
   useEffect(() => { setInput(query); }, [query]);
-  const resource = useApi<SearchResult>(query ? `/search?${new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) })}` : null);
+  const request = new URLSearchParams({ q: query, limit: String(PAGE_SIZE), offset: String(offset) });
+  if (category) request.set("category", category);
+  const resource = useApi<SearchResult>(query ? `/search?${request}` : null);
 
-  function go(q: string, at = 0) {
+  function go(q: string, at = 0, cat = category) {
     const next = new URLSearchParams({ q });
+    if (cat) next.set("category", cat);
     if (at) next.set("offset", String(at));
     router.push(`/search?${next}`);
   }
@@ -34,6 +38,9 @@ export default function SearchResults() {
         <div className="table-search search-box"><Icon name="search" />
           <input aria-label="كلمات البحث" placeholder="مثال: قرار إداري، أو &quot;عبارة كاملة&quot; بين علامتي تنصيص" value={input} maxLength={200} onChange={e => setInput(e.target.value)} />
           <button className="button primary compact" type="submit" disabled={!input.trim()}>بحث</button></div>
+        <select aria-label="تصفية التصنيف" value={category} onChange={e => go(query || input.trim(), 0, e.target.value)}>
+          <option value="">جميع التصنيفات</option>
+          {categories.data?.items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
       </form>
       {!query ? <div className="empty-state"><div className="empty-icon"><Icon name="search" /></div><h3>ابحث داخل المستندات</h3>
         <p>اكتب كلمة أو أكثر؛ تظهر المستندات التي تحتوي جميع الكلمات مع مقاطع منها والصفحة التي وردت فيها.</p></div>
@@ -62,7 +69,7 @@ function Result({ item }: { item: SearchItem }) {
     <div className="result-head">
       <Link href={`/documents/${doc.id}`} className="document-name"><FileSymbol mime={doc.mime_type} />
         <span><strong dir="auto">{doc.filename}</strong><small>{date(doc.created_at)} · {number(doc.page_count)} صفحة</small></span></Link>
-      <StatusBadge status={doc.status} />
+      <span className="result-tags"><CategoryBadge name={doc.category_name} state={doc.category_state} /><StatusBadge status={doc.status} /></span>
     </div>
     {item.filename_match && <p className="match-note"><Icon name="file" />الكلمات واردة في اسم الملف.</p>}
     {item.pages.map(page => <div key={page.page_no} className="page-hit">

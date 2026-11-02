@@ -1,6 +1,6 @@
 # Local full-stack application (Task 005, extended in Tasks 006 and 007)
 
-Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md).
+Task 007 (Sprint 2) added Arabic text search and human page review; see the API rows marked *(007)* and [ADR 0004](adr/0004-arabic-search-and-page-review.md). Task 008 (Sprint 3) added classification, rows marked *(008)*, [ADR 0005](adr/0005-explainable-classification.md).
 
 Task 006 added sign-in, roles and the OCR pipeline; every endpoint except `/api/health` and `/api/auth/*` now requires a session. Roles: admin (everything), archivist (upload, run OCR), reviewer (read, review in later tasks), viewer (read/download).
 
@@ -97,6 +97,12 @@ Root `.env.example` documents backend variables; they are read from the environm
 | GET `/api/documents/{uuid}/pages/{n}/text` *(007)* | Approved page text (latest revision, else OCR), its source, current version and revision history |
 | POST `/api/documents/{uuid}/pages/{n}/text` *(007)* | Reviewer/archivist/admin: `{text, expected_version, note}` saves a new revision; 409 if someone saved first or the document is being processed |
 | GET `/api/documents/{uuid}/pages/{n}/revisions/{v}` *(007)* | Full text of an earlier revision |
+| GET `/api/categories` *(008)* | Categories with keywords and confirmed/suggested counts |
+| POST `/api/categories`, PATCH `/api/categories/{id}` *(008)* | Admin: create (`id`, `name`, `description`, `keywords`), edit or deactivate |
+| GET `/api/documents/{uuid}/classification` *(008)* | State (`confirmed`/`suggested`/`uncertain`/`none`), latest suggestion with evidence and scores, latest decision, history, `sequence` |
+| POST `/api/documents/{uuid}/classification` *(008)* | Reviewer/archivist/admin: `{category_id, expected_sequence, reason}`; reason required to change a confirmed category; 409 on stale sequence |
+| POST `/api/documents/{uuid}/classification/suggest` *(008)* | Reviewer/archivist/admin: recompute the suggestion now |
+| GET `/api/classification/queue` *(008)* | Documents with an unconfirmed suggestion or no category; `category` filter also on `/api/documents` (`none` = unclassified) and `/api/search` |
 | GET `/api/documents/{uuid}/audit` | Ordered append-only event history |
 | GET `/api/documents/{uuid}/download` | Integrity-checked unchanged original as attachment |
 | GET `/api/documents/{uuid}/content` | Integrity-checked original inline; supports PDF byte ranges |

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0 — Sprint 3 / Task 008 (unreleased)
+- Explainable document classification (`keywords-v1`): ten default institutional categories (decision, circular,
+  letter, minutes, report, contract, financial, certificate, request, personnel); whole-word Arabic keyword
+  matching with clitics; heading and file-name weighting; confidence = top / (top + runner-up + 1); abstains
+  below score 3 or confidence 0.5. Suggested automatically after OCR, after a page correction, and once for
+  existing documents on start-up.
+- Human decisions: confirm the suggestion or choose another category; changing a confirmed category needs a
+  reason; expected-sequence check refuses stale edits; append-only `classifications` history; audit events
+  `classification.confirmed` / `classification.changed`.
+- Categories page (`/categories`): keywords and counts; admins add, edit or deactivate categories (logged as
+  security events). Category column and filter in Documents; category filter in search; approval queue in
+  Review; category breakdown on the dashboard.
+- Schema version 4: `categories`, `classifications` (append-only triggers) and view `document_categories`.
+- Quality gate: snapshots from Task 006 onwards now protect research code, data and results but not the
+  evolving application code, which git versions (ADR 0005). Snapshots 003–005 and the 108 historical files
+  are verified unchanged as before.
+
 ## 0.7.0 — Sprint 2 / Task 007 (unreleased)
 - Arabic full-text search over page text and file names (`GET /api/search`, `/search` page, top-bar search).
   Normalization ignores diacritics, tatweel and invisible marks, unifies أ/إ/آ/ٱ→ا, ؤ→و, ئ→ي, ى→ي, ة→ه and

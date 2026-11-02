@@ -1,6 +1,6 @@
 """Public response models exclude storage paths and unmeasured OCR fields."""
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from smartarchive.domain.documents import ProcessingStatus
 
 
@@ -15,6 +15,9 @@ class Document(BaseModel):
     status_reason: str
     created_at: datetime
     updated_at: datetime
+    category_id: str | None = None
+    category_name: str | None = None
+    category_state: str | None = None
 
 
 class DocumentList(BaseModel):
@@ -30,6 +33,8 @@ class Statistics(BaseModel):
     by_status: dict[ProcessingStatus, int]
     pages_pending_review: int = 0
     pages_reviewed: int = 0
+    classification: dict[str, int] = Field(default_factory=dict)
+    categories: list[dict] = Field(default_factory=list)
 
 
 class Credentials(BaseModel):
@@ -56,3 +61,23 @@ class PageRevision(BaseModel):
     text: str
     expected_version: int
     note: str = ''
+
+
+class CategoryCreate(BaseModel):
+    id: str
+    name: str
+    description: str = ''
+    keywords: list[str]
+
+
+class CategoryUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    keywords: list[str] | None = None
+    active: bool | None = None
+
+
+class ClassificationDecision(BaseModel):
+    category_id: str
+    expected_sequence: int
+    reason: str = ''

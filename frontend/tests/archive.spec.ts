@@ -145,6 +145,35 @@ test("extracted Arabic text is searchable and a correction becomes the searchabl
   await expect(page.getByRole("heading", { name: "صفحات بانتظار المراجعة", exact: true })).toBeVisible();
 });
 
+test("a person classifies a document, and the category filters documents", async ({ page }, info) => {
+  test.setTimeout(90_000);
+  await signIn(page);
+  await page.goto("/documents?q=" + encodeURIComponent("نص عربي"));
+  await page.getByRole("link", { name: /نص عربي.png image\/png/ }).first().click();
+  const panel = page.locator(".classification-panel");
+  await expect(panel.getByRole("heading", { name: "التصنيف", exact: true })).toBeVisible();
+  await expect(panel.getByText(/اقتراح النظام/)).toBeVisible({ timeout: 30_000 });
+  await panel.getByRole("button", { name: /اختيار فئة أخرى|إعادة التصنيف/ }).click();
+  await panel.getByLabel("الفئة", { exact: true }).selectOption("report");
+  const reason = panel.getByLabel(/السبب/);
+  await reason.fill("اختبار آلي للتصنيف");
+  await panel.getByRole("button", { name: "حفظ التصنيف", exact: true }).click();
+  await expect(panel.locator(".category-confirmed")).toHaveText("تقرير");
+  await expect(panel.getByText(/اعتمده/)).toBeVisible();
+  await page.screenshot({ path: info.outputPath("classification.png"), fullPage: true });
+
+  await page.goto("/documents?category=report");
+  await expect(page.getByRole("link", { name: /نص عربي.png image\/png/ })).toBeVisible();
+  await expect(page.locator("td .category-confirmed").first()).toHaveText("تقرير");
+  await page.goto("/documents?category=contract");
+  await expect(page.getByRole("heading", { name: "لا توجد نتائج مطابقة", exact: true })).toBeVisible();
+  await page.goto("/categories");
+  await expect(page.getByRole("heading", { name: "فئات المستندات", exact: true })).toBeVisible();
+  await expect(page.locator(".category-list > li").filter({ hasText: "تقرير" }).getByRole("link", { name: /معتمد/ })).toBeVisible();
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "توزيع التصنيفات", exact: true })).toBeVisible();
+});
+
 test("API failure shows an error rather than fabricated statistics", async ({ page }) => {
   await signIn(page);
   await page.route("**/api/statistics", route => route.abort());

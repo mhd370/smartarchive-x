@@ -162,7 +162,9 @@ class PageTexts:
                 'limit': limit, 'offset': offset}
 
     # -- search -------------------------------------------------------------------------------
-    def search(self, query: str, limit: int, offset: int, pages_per_document: int = 5) -> dict:
+    def search(self, query: str, limit: int, offset: int, pages_per_document: int = 5,
+               allowed: set[str] | None = None) -> dict:
+        """`allowed`, when given, limits results to these document ids (e.g. one category)."""
         terms = parse_query(query)
         if not terms:
             return {'query': query, 'terms': [], 'items': [], 'total': 0, 'limit': limit, 'offset': offset,
@@ -172,7 +174,9 @@ class PageTexts:
             rows = db.execute('SELECT t.document_id, t.page_no, t.source, t.revision, t.text FROM page_texts t'
                               f' WHERE {where} ORDER BY t.document_id, t.page_no LIMIT ?',
                               [*map(_like, terms), SEARCH_ROW_CAP + 1]).fetchall()
-            documents = {row['id']: dict(row) for row in db.execute('SELECT * FROM documents')}
+            documents = {row['id']: dict(row) for row in db.execute(
+                'SELECT d.*, v.category_id, v.state AS category_state, c.name AS category_name FROM documents d'
+                ' LEFT JOIN document_categories v ON v.document_id=d.id LEFT JOIN categories c ON c.id=v.category_id')}
         truncated = len(rows) > SEARCH_ROW_CAP
         hits: dict[str, dict] = {}
         for row in rows[:SEARCH_ROW_CAP]:
@@ -187,6 +191,8 @@ class PageTexts:
                 entry = hits.setdefault(document_id, {'pages': [], 'score': 0})
                 entry['filename_match'] = True
                 entry['score'] += 5
+        if allowed is not None:
+            hits = {key: value for key, value in hits.items() if key in allowed}
         newest_first = sorted(hits.items(), key=lambda item: documents[item[0]]['created_at'], reverse=True)
         ranked = sorted(newest_first, key=lambda item: -item[1]['score'])
         items = []

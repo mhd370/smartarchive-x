@@ -9,6 +9,7 @@ import { actors, bytes, date, decimal, number, percent, reasons } from "@/lib/fo
 import { Icon } from "@/components/icons";
 import { Failure, FileSymbol, Loading, StatusBadge } from "@/components/ui";
 import { PageReview } from "@/components/page-review";
+import { ClassificationPanel } from "@/components/classification-panel";
 
 const actions: Record<string, string> = {
   "document.uploaded": "رفع المستند وحفظ الأصل",
@@ -21,6 +22,8 @@ const actions: Record<string, string> = {
   "ocr.failed": "فشل المعالجة",
   "ocr.requeued": "إعادة المعالجة إلى قائمة الانتظار",
   "page.reviewed": "تصحيح نص صفحة ومراجعتها",
+  "classification.confirmed": "اعتماد تصنيف المستند",
+  "classification.changed": "إعادة تصنيف المستند",
 };
 const routes = { fast: "سريع (صفحة نظيفة)", layout: "واعٍ بالتخطيط", advanced: "متقدم (صفحة صعبة)" };
 const layouts = { simple: "عمود واحد", multi_column: "متعدد الأعمدة", tabular: "يحتوي جدولًا" };
@@ -40,6 +43,7 @@ export default function Detail({ id }: { id: string }) {
   const [showBoxes, setShowBoxes] = useState(true);
   const [focused, setFocused] = useState<number>();
   const [actionError, setActionError] = useState(""), [starting, setStarting] = useState(false);
+  const [textVersion, setTextVersion] = useState(0);  // a page correction can change the suggested category
 
   const status = processing.data?.status ?? resource.data?.status;
   useEffect(() => { setActive(status === "queued" || status === "processing"); }, [status]);
@@ -154,6 +158,8 @@ export default function Detail({ id }: { id: string }) {
             </>}
         </section>
 
+        <ClassificationPanel key={`${id}-${readyRun?.id ?? "none"}-${textVersion}`} documentId={id} onChanged={audit.reload} />
+
         {analysis && <QualityPanel analysis={analysis} />}
 
         <section className="panel metadata-panel">
@@ -191,7 +197,7 @@ export default function Detail({ id }: { id: string }) {
             </button></li>)}</ol>}
     </section>}
 
-    {readyRun && <PageReview documentId={id} page={page} onSaved={() => { processing.reload(); audit.reload(); }} />}
+    {readyRun && <PageReview documentId={id} page={page} onSaved={() => { processing.reload(); audit.reload(); setTextVersion(value => value + 1); }} />}
 
     {summary.data && summary.data.runs.length > 0 && <section className="panel runs-panel">
       <div className="section-heading"><div><h2>نسخ المعالجة</h2><p>كل تشغيل يُحفظ كنسخة مستقلة ولا يستبدل ما قبله.</p></div></div>
@@ -212,7 +218,7 @@ export default function Detail({ id }: { id: string }) {
       </div>
       {audit.loading ? <Loading /> : audit.error ? <Failure message={audit.error} retry={audit.reload} /> :
         <ol className="audit-list">{audit.data?.items.map(event => <li key={event.sequence}>
-          <span className="audit-marker"><Icon name={event.action === "document.uploaded" ? "upload" : event.action.startsWith("ocr.") ? "scan" : event.action === "page.reviewed" ? "edit" : "clock"} /></span>
+          <span className="audit-marker"><Icon name={event.action === "document.uploaded" ? "upload" : event.action.startsWith("ocr.") ? "scan" : event.action === "page.reviewed" ? "edit" : event.action.startsWith("classification.") ? "tag" : "clock"} /></span>
           <div><strong>{actions[event.action] || event.action}</strong>
             <small dir="auto">{actors(event.actor)}</small></div>
           <time dateTime={event.timestamp}>{date(event.timestamp)}</time>
