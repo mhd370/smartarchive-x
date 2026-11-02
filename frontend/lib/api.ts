@@ -4,10 +4,13 @@ export type Permission = "documents.read" | "documents.upload" | "ocr.run" | "re
 export type DocumentRecord = {
   id: string; filename: string; size_bytes: number; mime_type: string; sha256: string;
   page_count: number; status: Status; status_reason: string; created_at: string; updated_at: string;
+  category_id?: string | null; category_name?: string | null; category_state?: CategoryState | null;
 };
 export type DocumentList = { items: DocumentRecord[]; total: number; limit: number; offset: number };
 export type Statistics = { total_documents: number; total_bytes: number; by_status: Record<Status, number>;
-  pages_pending_review: number; pages_reviewed: number };
+  pages_pending_review: number; pages_reviewed: number;
+  classification: Record<CategoryState, number>;
+  categories: { id: string; name: string; confirmed: number; suggested: number }[] };
 export type Health = { status: string; ocr_configured: boolean; ocr_engine: string | null; ocr_languages: string | null;
   max_upload_bytes: number; supported_extensions: string[] };
 export type OcrRun = { id: string; document_id: string; status: "queued" | "processing" | "ready" | "failed";
@@ -36,6 +39,20 @@ export type User = { id: string; username: string; display_name: string; role: R
   created_at: string; permissions: Permission[] };
 export type AuthStatus = { setup_required: boolean; authenticated: boolean };
 export type TextSource = "ocr" | "review";
+export type CategoryState = "confirmed" | "suggested" | "uncertain" | "none";
+export type Category = { id: string; name: string; description: string; keywords: string[]; active: boolean;
+  created_by: string; created_at: string; updated_at: string; confirmed: number; suggested: number };
+export type KeywordHit = { keyword: string; count: number; heading: boolean; filename: boolean; points: number };
+export type ClassificationRecord = { sequence: number; id: string; document_id: string; kind: "suggestion" | "decision";
+  category_id: string | null; category_name: string | null; confidence: number | null; method: string;
+  scores: Record<string, number> | null; evidence: Record<string, KeywordHit[]> | null;
+  basis: Record<string, unknown>; reason: string; actor: string; created_at: string };
+export type Classification = { document_id: string; state: CategoryState; category_id: string | null;
+  category_name: string | null; sequence: number; suggestion: ClassificationRecord | null;
+  decision: ClassificationRecord | null; history: ClassificationRecord[] };
+export type ClassificationQueue = { items: { document_id: string; filename: string; page_count: number; created_at: string;
+  state: CategoryState; category_id: string | null; category_name: string | null; confidence: number | null }[];
+  total: number; limit: number; offset: number };
 export type SnippetPart = { text: string; match: boolean };
 export type SearchPage = { page_no: number; source: TextSource; revision: number | null; match_count: number;
   snippets: SnippetPart[][] };

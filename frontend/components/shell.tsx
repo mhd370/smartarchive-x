@@ -14,11 +14,12 @@ const navigation: { href: string; label: string; icon: IconName; permission: Per
   { href: "/documents", label: "المستندات", icon: "folder", permission: "documents.read" },
   { href: "/search", label: "البحث في النصوص", icon: "search", permission: "documents.read" },
   { href: "/review", label: "المراجعة", icon: "review", permission: "review.write" },
+  { href: "/categories", label: "التصنيفات", icon: "tag", permission: "documents.read" },
   { href: "/upload", label: "رفع مستند", icon: "upload", permission: "documents.upload" },
   { href: "/users", label: "المستخدمون", icon: "users", permission: "users.manage" },
 ];
 const titles: Record<string, string> = { "/": "نظرة عامة", "/upload": "رفع مستند", "/documents": "المستندات", "/users": "المستخدمون",
-  "/search": "البحث في النصوص", "/review": "المراجعة" };
+  "/search": "البحث في النصوص", "/review": "المراجعة", "/categories": "التصنيفات" };
 
 export function Shell({ children }: { children: ReactNode }) {
   return <AuthProvider><Frame>{children}</Frame></AuthProvider>;

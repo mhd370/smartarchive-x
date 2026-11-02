@@ -13,11 +13,12 @@ from smartarchive.persistence.database import Database
 from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
 from smartarchive.search.pages import PageTexts
+from smartarchive.classification.service import Classifications
 from smartarchive.services.auth import Accounts, can
 from smartarchive.services.documents import Documents, public_record
 from .middleware import UploadLimitMiddleware
-from .schemas import (Credentials, Document, DocumentList, PageRevision, SetupRequest, Statistics, UserCreate,
-                      UserUpdate)
+from .schemas import (CategoryCreate, CategoryUpdate, ClassificationDecision, Credentials, Document, DocumentList,
+                      PageRevision, SetupRequest, Statistics, UserCreate, UserUpdate)
 
 COOKIE = 'sa_session'
 
@@ -30,6 +31,8 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     accounts = Accounts(db, settings.session_hours)
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
+    classes = Classifications(db)
+    ocr.on_ready = classes.suggest_quietly
     worker = Worker(ocr)
 
     @asynccontextmanager
@@ -37,14 +40,16 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         originals.initialize()
         db.initialize()
         texts.ensure_indexed()
+        classes.seed()
+        classes.ensure_suggested()
         if settings.ocr_worker:
             worker.start()
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.7.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.8.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
-    api.state.texts = texts
+    api.state.texts, api.state.classes = texts, classes
     api.add_middleware(UploadLimitMiddleware, max_bytes=settings.max_upload_bytes + 1024 * 1024,
                        allowed_origins=settings.allowed_origins)
     api.add_middleware(CORSMiddleware, allow_origins=list(settings.allowed_origins), allow_credentials=True,
@@ -133,7 +138,10 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.get('/api/statistics', response_model=Statistics)
     def statistics(user: Reader):
         queue = texts.queue(1, 0)
-        return {**db.statistics(), 'pages_pending_review': queue['total'], 'pages_reviewed': queue['reviewed_pages']}
+        return {**db.statistics(), 'pages_pending_review': queue['total'], 'pages_reviewed': queue['reviewed_pages'],
+                'classification': classes.summary(),
+                'categories': [{'id': c['id'], 'name': c['name'], 'confirmed': c['confirmed'], 'suggested': c['suggested']}
+                               for c in classes.categories() if c['active'] or c['confirmed'] or c['suggested']]}
 
     @api.post('/api/documents', response_model=Document, status_code=201)
     def upload(file: Annotated[UploadFile, File()], user: Uploader):
@@ -151,8 +159,9 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.get('/api/documents', response_model=DocumentList)
     def listing(user: Reader, q: str = Query('', max_length=200), status: ProcessingStatus | None = None,
                 kind: Literal['pdf', 'image'] | None = None,
+                category: str | None = Query(None, max_length=40),
                 limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):
-        result = db.list(q, status.value if status else None, kind, limit, offset)
+        result = db.list(q, status.value if status else None, kind, limit, offset, category)
         result['items'] = [public_record(row) for row in result['items']]
         return result
 
@@ -205,8 +214,9 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     # -- search and review (Sprint 2) ------------------------------------------------------------
     @api.get('/api/search')
     def search(user: Reader, q: str = Query(..., min_length=1, max_length=200),
+               category: str | None = Query(None, max_length=40),
                limit: int = Query(20, ge=1, le=50), offset: int = Query(0, ge=0, le=100_000)):
-        return texts.search(q, limit, offset)
+        return texts.search(q, limit, offset, allowed=classes.documents_in(category) if category else None)
 
     @api.get('/api/review/queue')
     def review_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100), offset: int = Query(0, ge=0, le=1_000_000)):
@@ -224,7 +234,43 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.post('/api/documents/{document_id}/pages/{page}/text')
     def revise_page(document_id: UUID, page: int, body: PageRevision, user: Reviewer):
         record = documents.get(str(document_id))
-        return texts.revise(record, page, body.text, body.expected_version, body.note, user['username'])
+        result = texts.revise(record, page, body.text, body.expected_version, body.note, user['username'])
+        classes.suggest_quietly(record['id'], user['username'], 'review')  # corrected text may change the category
+        return result
+
+    # -- classification (Sprint 3) --------------------------------------------------------------
+    @api.get('/api/categories')
+    def categories(user: Reader):
+        return {'items': classes.categories()}
+
+    @api.post('/api/categories', status_code=201)
+    def create_category(body: CategoryCreate, user: Admin):
+        return classes.create_category(body.id, body.name, body.description, body.keywords, user['username'])
+
+    @api.patch('/api/categories/{category_id}')
+    def update_category(category_id: str, body: CategoryUpdate, user: Admin):
+        return classes.update_category(category_id, user['username'], name=body.name, description=body.description,
+                                       keywords=body.keywords, active=body.active)
+
+    @api.get('/api/classification/queue')
+    def classification_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100),
+                             offset: int = Query(0, ge=0, le=1_000_000)):
+        return classes.queue(limit, offset)
+
+    @api.get('/api/documents/{document_id}/classification')
+    def classification(document_id: UUID, user: Reader):
+        return classes.get(documents.get(str(document_id))['id'])
+
+    @api.post('/api/documents/{document_id}/classification/suggest')
+    def classification_suggest(document_id: UUID, user: Reviewer):
+        record = documents.get(str(document_id))
+        classes.suggest(record['id'], user['username'], 'manual', force=True)
+        return classes.get(record['id'])
+
+    @api.post('/api/documents/{document_id}/classification')
+    def classification_decide(document_id: UUID, body: ClassificationDecision, user: Reviewer):
+        record = documents.get(str(document_id))
+        return classes.decide(record['id'], body.category_id, body.reason, body.expected_sequence, user['username'])
 
     @api.get('/api/documents/{document_id}/audit')
     def audit(document_id: UUID, user: Reader):

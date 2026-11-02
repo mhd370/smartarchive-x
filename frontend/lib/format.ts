@@ -23,5 +23,10 @@ export const reasons: Record<string, string> = {
 export const percent = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : new Intl.NumberFormat("ar", { style: "percent", maximumFractionDigits: 0 }).format(value);
 export const decimal = (value: number, digits = 2) => new Intl.NumberFormat("ar", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value);
-export const actors = (actor: string) => actor === "local" ? "جلسة محلية" : actor === "system:ocr" ? "المعالجة الآلية" : actor;
+export const actors = (actor: string) => actor === "local" ? "جلسة محلية" : actor === "system:ocr" ? "المعالجة الآلية" : actor === "system:classifier" ? "التصنيف الآلي" : actor;
+export const categoryStates = { confirmed: "معتمد", suggested: "مقترح", uncertain: "غير مؤكد", none: "غير مصنّف" } as const;
+export const suggestionOutcomes: Record<string, string> = {
+  suggested: "اقتراح بثقة كافية", weak_evidence: "الأدلة ضعيفة (كلمة واحدة أو أقل من الحد)",
+  ambiguous: "أكثر من فئة متقاربة", no_keywords: "لا توجد كلمات مفتاحية معروفة في النص", no_text: "لا يوجد نص",
+};
 export const sources = { ocr: "نص آلي (OCR)", review: "نص مُراجَع بشريًا" } as const;
