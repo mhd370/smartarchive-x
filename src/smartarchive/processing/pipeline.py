@@ -15,11 +15,12 @@ from smartarchive.persistence.database import Database, now
 from smartarchive.persistence.storage import OriginalStore
 from .ocr import Engine, TesseractEngine, Word, mean_confidence
 from .preprocess import prepare
-from .quality import assess
+from .quality import BOUNDS, assess
 from .render import page_images
 
 log = logging.getLogger(__name__)
 SYSTEM = 'system:ocr'
+FULL_RESOLUTION_DPI = BOUNDS['dpi'][1]
 
 
 def _round(value):
@@ -44,7 +45,8 @@ class OcrService:
                     self._engine = self._factory()
                 elif self.settings.tesseract:
                     self._engine = TesseractEngine(self.settings.tesseract, self.settings.ocr_languages,
-                                                   self.settings.ocr_page_timeout_seconds)
+                                                   self.settings.ocr_page_timeout_seconds,
+                                                   self.settings.tessdata_dir)
                 else:
                     self._engine_error = 'tesseract_not_found'
             except Exception as exc:  # recorded and reported, never hidden behind fake results
@@ -129,7 +131,10 @@ class OcrService:
         threshold = self.settings.review_confidence_threshold
         page_results = []
         for page_no, image, dpi, dpi_source in page_images(path, record['mime_type'], self.settings.ocr_dpi):
-            quality = assess(image, dpi, self.settings.quality_weights)
+            # A rendered PDF page has the resolution we chose, not a defect of the source: score it as full
+            # resolution (as before rendering went from 300 to 200 dpi, which Tesseract reads better).
+            quality = assess(image, max(dpi, FULL_RESOLUTION_DPI) if dpi_source == 'rendered' else dpi,
+                             self.settings.quality_weights)
             width, height = image.size
             lines, steps = [], [{'step': 'skipped', 'reason': 'blank_page'}]
             if not quality.blank:

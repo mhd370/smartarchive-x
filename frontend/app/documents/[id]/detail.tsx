@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiUrl, patch, post, type AuditEvent, type DocumentRecord, type Folder, type OcrLine, type OcrPage, type OcrSummary,
   type PageAnalysis, type Processing } from "@/lib/api";
@@ -60,7 +60,16 @@ export default function Detail({ id }: { id: string }) {
   }
 
   const status = processing.data?.status ?? resource.data?.status;
-  useEffect(() => { setActive(status === "queued" || status === "processing"); }, [status]);
+  // Status and run summary poll separately and both stop when processing ends, so the summary is fetched once
+  // more at that moment: its last poll may predate the run becoming ready (the page then stayed on "processing").
+  const reloadSummary = summary.reload;
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    const running = status === "queued" || status === "processing";
+    if (wasRunning.current && !running) reloadSummary();
+    wasRunning.current = running;
+    setActive(running);
+  }, [status, reloadSummary]);
   const run = summary.data?.run;
   const readyRun = run?.status === "ready" ? run : undefined;
   const ocrPage = useApi<OcrPage>(readyRun ? `/documents/${id}/ocr/pages/${page}?run_id=${readyRun.id}` : null);

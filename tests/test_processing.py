@@ -88,6 +88,22 @@ class QualityTests(unittest.TestCase):
                 self.assertAlmostEqual(quality.skew_angle, -angle, delta=0.4)
                 self.assertLess(quality.skew, 0.5)
 
+    def test_shaded_scan_keeps_true_skew_and_ink(self):
+        # Regression (synthetic evaluation, Sprint 6): a shadow across the page was thresholded as ink,
+        # which made a 3 degree tilt read as 10.5 and the deskew then destroyed the page for OCR.
+        tilted = np.asarray(text_page().rotate(3, expand=True, fillcolor='white')).astype(np.float32)
+        tilted = 255 - (255 - tilted) * 0.7
+        tilted *= np.linspace(0.55, 1.0, tilted.shape[1], dtype=np.float32)[None, :, None]
+        shaded = Image.fromarray(tilted.clip(0, 255).astype(np.uint8))
+        quality = assess(shaded, 300)
+        self.assertAlmostEqual(quality.skew_angle, -3.0, delta=0.4)
+        self.assertLess(quality.raw['ink_ratio'], 0.2)
+        self.assertGreater(quality.raw['background_range'], 0.2)
+        prepared = prepare(shaded, quality, tesseract_cmd=None)
+        self.assertIn('illumination', [s['step'] for s in prepared.steps])
+        paper = np.asarray(prepared.image.convert('L'))[200:260, 60:110]  # left margin, the darkest paper
+        self.assertGreater(float(paper.mean()), 235)
+
     def test_layout_detects_columns_and_tables(self):
         self.assertEqual(assess(text_page(columns=2), 300).columns, 2)
         two = assess(text_page(columns=2), 300)
@@ -159,6 +175,14 @@ class OcrAdapterTests(unittest.TestCase):
         self.assertGreaterEqual(sum(word in text for word in WORDS), 5)
         self.assertTrue(all(line.confidence is None or 0 <= line.confidence <= 1 for line in lines))
         self.assertTrue(all(line.box[2] > line.box[0] and line.box[3] > line.box[1] for line in lines))
+
+    @unittest.skipUnless(find_tesseract(), 'Tesseract is not installed')
+    def test_missing_languages_are_reported_including_script_models(self):
+        from smartarchive.processing.ocr import TesseractEngine, installed_languages
+        self.assertIn('eng', installed_languages(find_tesseract()))
+        engine = TesseractEngine(find_tesseract(), 'eng+script/NoSuchScript', timeout=120)
+        self.assertEqual(engine.languages, 'eng')
+        self.assertEqual(engine.missing, ['script/NoSuchScript'])
 
 
 class RenderAndDegradeTests(unittest.TestCase):

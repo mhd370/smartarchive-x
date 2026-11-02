@@ -53,8 +53,24 @@ def _scaled_gray(image: Image.Image) -> np.ndarray:
     return gray
 
 
+def background(gray: np.ndarray) -> np.ndarray:
+    """Paper brightness under the text: a max filter wider than any stroke, then a median smooth."""
+    k = max(15, (max(gray.shape) // 100) | 1)
+    return cv2.medianBlur(cv2.dilate(gray, np.ones((k, k), np.uint8)), min(2 * k + 1, 255))
+
+
+def flatten(gray: np.ndarray, paper: np.ndarray | None = None) -> np.ndarray:
+    """Divide out uneven illumination (shadows, stains, scanner gradients) so paper becomes uniform white.
+    This is not binarisation: grey levels and faint strokes are kept."""
+    paper = background(gray) if paper is None else paper
+    return np.clip(gray.astype(np.float32) / np.maximum(paper, 1) * 255.0, 0, 255).astype(np.uint8)
+
+
 def ink_mask(gray: np.ndarray) -> np.ndarray:
-    _, mask = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    """Ink pixels (255). Otsu runs on the flattened page: on a shaded scan, a global threshold on the raw
+    page marks the dark side of the paper as ink, which corrupts the skew, layout and contrast estimates
+    (synthetic evaluation, Sprint 6: half the page counted as ink and a 3 degree skew measured as 10.5)."""
+    _, mask = cv2.threshold(flatten(gray), 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     return mask
 
 
@@ -128,6 +144,8 @@ def _columns_and_tables(mask: np.ndarray) -> tuple[int, bool]:
 def assess(image: Image.Image, dpi: float | None,
            weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)) -> Quality:
     gray = _scaled_gray(image)
+    paper = background(gray)
+    background_range = float(np.percentile(paper, 95) - np.percentile(paper, 5)) / 255.0
     mask = ink_mask(gray)
     ink = mask > 0
     ink_ratio = float(ink.mean())
@@ -139,9 +157,9 @@ def assess(image: Image.Image, dpi: float | None,
         contrast_range = 0.0
     blank = ink_ratio < 0.001 or contrast_range < 0.08
     laplacian = float(cv2.Laplacian(gray, cv2.CV_64F).var())
-    background = mask == 0
+    paper_pixels = mask == 0
     residual = gray.astype(np.int16) - cv2.medianBlur(gray, 3).astype(np.int16)
-    noise_sigma = float(residual[background].std()) if background.any() else 0.0
+    noise_sigma = float(residual[paper_pixels].std()) if paper_pixels.any() else 0.0
     angle = 0.0 if blank else estimate_skew(mask)
     columns, has_table = (0, False) if blank else _columns_and_tables(ink_mask(rotate(gray, angle, 255)[0]) if abs(angle) >= 0.3 else mask)
 
@@ -158,7 +176,7 @@ def assess(image: Image.Image, dpi: float | None,
     route = 'fast' if score >= ROUTE_FAST else 'layout' if score >= ROUTE_LAYOUT else 'advanced'
     raw = {'laplacian_variance': round(laplacian, 2), 'contrast_range': round(contrast_range, 4),
            'dpi': round(dpi, 1) if dpi else None, 'noise_sigma': round(noise_sigma, 3),
-           'ink_ratio': round(ink_ratio, 5), 'bounds': BOUNDS,
+           'ink_ratio': round(ink_ratio, 5), 'background_range': round(background_range, 4), 'bounds': BOUNDS,
            'route_thresholds': {'fast': ROUTE_FAST, 'layout': ROUTE_LAYOUT}}
     return Quality(score=score, route=route, blank=blank, skew_angle=angle, columns=columns, has_table=has_table,
                    layout=layout, sharpness=round(sharpness, 4), contrast=round(contrast, 4),

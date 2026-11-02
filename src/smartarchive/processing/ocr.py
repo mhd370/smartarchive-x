@@ -3,6 +3,7 @@
 Confidence is the engine's value rescaled to 0..1; it is never estimated from text length.
 """
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Protocol
 
 from PIL import Image
@@ -38,14 +39,32 @@ def mean_confidence(words: list[Word]) -> float | None:
     return round(sum(c * length for c, length in scored) / total, 4) if total else None
 
 
+def installed_languages(command: str, tessdata_dir: str | None = None) -> set[str]:
+    """Models Tesseract can load, including `script/...` ones. pytesseract.get_languages is not used: it drops
+    names with a slash and caches its first answer for the whole process, whatever folder is asked."""
+    import subprocess
+    args = [command] + (['--tessdata-dir', tessdata_dir] if tessdata_dir else []) + ['--list-langs']
+    result = subprocess.run(args, capture_output=True, timeout=60)
+    lines = result.stdout.decode('utf-8', 'replace').splitlines()
+    names = {line.strip().replace('\\', '/') for line in lines[1:] if line.strip() and ' ' not in line.strip()}
+    if tessdata_dir:  # some Windows builds list only top-level models; the files themselves are the truth
+        root = Path(tessdata_dir)
+        names |= {path.relative_to(root).with_suffix('').as_posix() for path in root.rglob('*.traineddata')}
+    return names
+
+
 class TesseractEngine:
     name = 'tesseract'
 
-    def __init__(self, command: str, languages: str, timeout: int = 120):
+    def __init__(self, command: str, languages: str, timeout: int = 120, tessdata_dir=None):
         import pytesseract
         self._tess = pytesseract
         pytesseract.pytesseract.tesseract_cmd = command
-        installed = set(pytesseract.get_languages(config=''))
+        self.tessdata_dir = str(tessdata_dir) if tessdata_dir else None
+        if self.tessdata_dir and ' ' in self.tessdata_dir:
+            raise RuntimeError('the tessdata folder path must not contain spaces')
+        self._config = f'--tessdata-dir {self.tessdata_dir} ' if self.tessdata_dir else ''
+        installed = installed_languages(command, self.tessdata_dir)
         requested = [code for code in languages.split('+') if code]
         self.languages = '+'.join(code for code in requested if code in installed)
         self.missing = [code for code in requested if code not in installed]
@@ -58,7 +77,7 @@ class TesseractEngine:
         return self._version
 
     def recognize(self, image: Image.Image) -> list[Line]:
-        data = self._tess.image_to_data(image, lang=self.languages, config='--oem 1 --psm 3',
+        data = self._tess.image_to_data(image, lang=self.languages, config=self._config + '--oem 1 --psm 3',
                                         output_type=self._tess.Output.DICT, timeout=self.timeout)
         groups: dict[tuple[int, int, int], list[Word]] = {}
         for index, raw in enumerate(data['text']):
