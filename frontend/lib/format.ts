@@ -17,9 +17,11 @@ export const reasons: Record<string, string> = {
   OCR_RUNNING: "فحص الجودة واستخراج النص جارٍ",
   OCR_COMPLETED: "اكتمل استخراج النص",
   REVIEW_REQUIRED: "اكتمل الاستخراج ويحتاج مراجعة بشرية",
+  REVIEW_COMPLETED: "اكتمل الاستخراج وروجعت الصفحات المشكوك فيها",
   OCR_FAILED: "تعذرت المعالجة",
 };
 export const percent = (value: number | null | undefined) =>
   value === null || value === undefined ? "—" : new Intl.NumberFormat("ar", { style: "percent", maximumFractionDigits: 0 }).format(value);
 export const decimal = (value: number, digits = 2) => new Intl.NumberFormat("ar", { maximumFractionDigits: digits, minimumFractionDigits: digits }).format(value);
 export const actors = (actor: string) => actor === "local" ? "جلسة محلية" : actor === "system:ocr" ? "المعالجة الآلية" : actor;
+export const sources = { ocr: "نص آلي (OCR)", review: "نص مُراجَع بشريًا" } as const;

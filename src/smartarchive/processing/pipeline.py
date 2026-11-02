@@ -28,8 +28,9 @@ def _round(value):
 
 class OcrService:
     def __init__(self, db: Database, store: OriginalStore, settings: Settings,
-                 engine_factory: Callable[[], Engine] | None = None):
+                 engine_factory: Callable[[], Engine] | None = None, texts=None):
         self.db, self.store, self.settings = db, store, settings
+        self.texts = texts  # PageTexts: makes completed runs searchable in the same transaction
         self._factory = engine_factory
         self._engine: Engine | None = None
         self._engine_error: str | None = None
@@ -163,7 +164,13 @@ class OcrService:
         with self.db.connect() as db:
             db.execute("UPDATE ocr_runs SET status='ready', finished_at=?, mean_confidence=?, review_required=? WHERE id=?",
                        (now(), overall, int(review), run['id']))
-            self.db.set_status(db, run['document_id'], 'ready', 'REVIEW_REQUIRED' if review else 'OCR_COMPLETED')
+            reason = 'REVIEW_REQUIRED' if review else 'OCR_COMPLETED'
+            if self.texts:
+                self.texts.index_run(db, run['id'], run['document_id'])
+                flagged = any(r for _, _, r, _ in page_results)
+                if flagged and self.texts.pending_count(db, run['document_id']) == 0:
+                    reason = 'REVIEW_COMPLETED'  # every flagged page already has a human correction
+            self.db.set_status(db, run['document_id'], 'ready', reason)
             self.db._event(db, run['document_id'], 'ocr.completed',
                            {'run_id': run['id'], 'mean_confidence': overall, 'review_required': review,
                             'pages': len(page_results), 'characters': total}, SYSTEM)

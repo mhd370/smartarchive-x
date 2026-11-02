@@ -28,6 +28,8 @@ class Statistics(BaseModel):
     total_documents: int
     total_bytes: int
     by_status: dict[ProcessingStatus, int]
+    pages_pending_review: int = 0
+    pages_reviewed: int = 0
 
 
 class Credentials(BaseModel):
@@ -48,3 +50,9 @@ class UserUpdate(BaseModel):
     active: bool | None = None
     display_name: str | None = None
     password: str | None = None
+
+
+class PageRevision(BaseModel):
+    text: str
+    expected_version: int
+    note: str = ''

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0 — Sprint 2 / Task 007 (unreleased)
+- Arabic full-text search over page text and file names (`GET /api/search`, `/search` page, top-bar search).
+  Normalization ignores diacritics, tatweel and invisible marks, unifies أ/إ/آ/ٱ→ا, ؤ→و, ئ→ي, ى→ي, ة→ه and
+  Arabic-Indic digits; substring matching keeps clitics (و/ب/ال) searchable; "quoted phrases" stay together.
+  Results are grouped per document with page links and highlighted excerpts in the original text.
+- Human review of page text: append-only, numbered revisions with author, note and optimistic version check
+  (stale edits are refused with 409); the corrected text replaces the OCR text in search; a new OCR run never
+  overwrites a corrected page. Audit event `page.reviewed`.
+- Review queue (`GET /api/review/queue`, `/review` page) of low-confidence or empty pages, lowest confidence first;
+  the document reason moves from REVIEW_REQUIRED to REVIEW_COMPLETED when every flagged page is corrected.
+- Dashboard shows pages awaiting review; document page shows the approved text, its source and revision history,
+  and opens at `?page=n` from search results.
+- Schema version 3 adds `page_revisions` (append-only triggers) and the derived `page_texts`; existing completed
+  runs are indexed automatically on start-up.
+
 ## 0.6.0 — Sprint 1 / Task 006 (unreleased)
 - Sign-in, first-run admin setup, four roles, user management page, session revocation, account lockout.
 - Every document action is audited with the acting user; account events in an append-only security log.

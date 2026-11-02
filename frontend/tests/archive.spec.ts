@@ -104,6 +104,47 @@ test("real Arabic image: upload, OCR, quality, preview, download, search and mob
   await expect(page.locator("nav").getByRole("link", { name: "المستندات", exact: true })).toBeVisible();
 });
 
+test("extracted Arabic text is searchable and a correction becomes the searchable text", async ({ page }, info) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  await page.goto("/documents?q=" + encodeURIComponent("نص عربي"));
+  await page.getByRole("link", { name: /نص عربي.png image\/png/ }).first().click();
+  await expect(page.locator(".ocr-lines .line-text").first()).toBeVisible({ timeout: 60_000 });
+  const lines = await page.locator(".ocr-lines .line-text").allTextContents();
+  const words = lines.join(" ").match(/[\u0621-\u064A]{3,}/g) ?? [];
+  expect(words.length).toBeGreaterThan(0);
+  const word = words.reduce((longest, item) => item.length > longest.length ? item : longest);
+
+  const box = page.getByRole("textbox", { name: "بحث في نصوص المستندات وأسمائها", exact: true });
+  await box.fill(word);
+  await box.press("Enter");
+  await expect(page).toHaveURL(/\/search\?q=/);
+  const result = page.locator(".search-result").filter({ hasText: "نص عربي.png" });
+  await expect(result).toBeVisible();
+  await expect(result.locator("mark").first()).toBeVisible();
+  await expect(result.locator(".source-tag").first()).toHaveText("نص آلي (OCR)");
+  await page.screenshot({ path: info.outputPath("search-results.png"), fullPage: true });
+
+  await result.getByRole("link", { name: /الصفحة/ }).first().click();
+  await page.getByRole("button", { name: "تصحيح النص", exact: true }).click();
+  const editor = page.getByLabel("نص الصفحة بعد التصحيح", { exact: true });
+  const original = await editor.inputValue();
+  await editor.fill("مستند مصحح للاختبار\n" + original);
+  await page.getByLabel("ملاحظة (اختيارية)", { exact: true }).fill("اختبار آلي");
+  await page.getByRole("button", { name: "حفظ التصحيح", exact: true }).click();
+  await expect(page.getByText(/حُفظ التصحيح كنسخة/)).toBeVisible();
+  await expect(page.locator(".review-panel .source-tag")).toHaveText("نص مُراجَع بشريًا");
+  await page.screenshot({ path: info.outputPath("page-reviewed.png"), fullPage: true });
+  await page.getByRole("button", { name: "تحديث السجل", exact: true }).click();
+  await expect(page.getByText("تصحيح نص صفحة ومراجعتها", { exact: true })).toBeVisible();
+
+  await page.goto("/search?q=" + encodeURIComponent("مصحح للاختبار"));
+  const corrected = page.locator(".search-result").filter({ hasText: "نص عربي.png" });
+  await expect(corrected.locator(".source-tag").first()).toHaveText("نص مُراجَع بشريًا");
+  await page.goto("/review");
+  await expect(page.getByRole("heading", { name: "صفحات بانتظار المراجعة", exact: true })).toBeVisible();
+});
+
 test("API failure shows an error rather than fabricated statistics", async ({ page }) => {
   await signIn(page);
   await page.route("**/api/statistics", route => route.abort());
