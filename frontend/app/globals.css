@@ -108,6 +108,7 @@
 .classification-panel{padding:22px}.classification-panel .section-heading{padding:0}
 .classification-line{display:flex;gap:6px;align-items:center;font-size:11px;color:#3f7c5c;margin:6px 0 10px}.classification-line .icon{width:15px}
 .suggestion-box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:8px 0;background:#fbfcfc}
+.reclassification-box{border:1px solid #ecd9a8;border-radius:8px;padding:10px 12px;margin:8px 0;background:#fdf9ee;font-size:12px;color:#6d5a2a}.reclassification-box p{display:flex;gap:6px;align-items:flex-start;flex-wrap:wrap}.reclassification-box .icon{width:16px;height:16px;flex:none}.reclassification-box .classification-actions{margin-top:8px}
 .suggestion-head{display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:12px;flex-wrap:wrap}
 .keyword-list{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px;padding:0}
 .keyword-list li{font-size:11px;background:#eef5f3;color:#35535d;border-radius:5px;padding:2px 8px}.keyword-list small{color:#7d9097;margin-inline-start:4px}

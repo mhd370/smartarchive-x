@@ -33,7 +33,7 @@ export function ClassificationPanel({ documentId, onChanged }: { documentId: str
   if (resource.loading) return <section className="panel classification-panel"><Loading /></section>;
   if (resource.error) return <section className="panel classification-panel"><Failure message={resource.error} retry={resource.reload} /></section>;
   const data = resource.data!;
-  const suggestion = data.suggestion, decision = data.decision;
+  const suggestion = data.suggestion, decision = data.decision, proposal = data.reclassification;
   const names = new Map((categories.data?.items ?? []).map(item => [item.id, item.name]));
   const evidence = suggestion?.category_id ? suggestion.evidence?.[suggestion.category_id] ?? [] : [];
   const candidates = Object.entries(suggestion?.scores ?? {}).slice(0, 3);
@@ -49,6 +49,17 @@ export function ClassificationPanel({ documentId, onChanged }: { documentId: str
     {data.state === "none" && <p className="muted">لم يُقترح تصنيف بعد؛ يُقترح تلقائيًا بعد استخراج النص.</p>}
     {decision && <p className="classification-line"><Icon name="check" />
       اعتمده <span dir="auto">{actors(decision.actor)}</span> · {date(decision.created_at)}{decision.reason && <> · <span dir="auto">{decision.reason}</span></>}</p>}
+    {proposal && <div className="reclassification-box" role="status">
+      <p><Icon name="tag" /> <b>أدلة جديدة تقترح إعادة التصنيف:</b> من «{names.get(proposal.from_category_id) ?? proposal.from_category_id}»
+        إلى «{names.get(proposal.to_category_id) ?? proposal.to_category_id}» (حصة {percent(proposal.share)} مقابل {percent(proposal.current_share)}).
+        التصنيف المعتمد لا يتغيّر إلا بقرارك.</p>
+      {writer && !editing && <div className="classification-actions">
+        <button className="button primary compact" disabled={busy} onClick={() => { setEditing(true); setChoice(proposal.to_category_id); setReason("قبول اقتراح إعادة التصنيف بعد أدلة جديدة"); setError(""); }}>
+          <Icon name="check" />مراجعة وقبول</button>
+        <button className="button secondary compact" disabled={busy} onClick={() => send(`/documents/${documentId}/classification/reclassification/dismiss`, { suggestion_id: proposal.suggestion_id, reason: "" })}>
+          إبقاء التصنيف الحالي</button>
+      </div>}
+    </div>}
     {suggestion && <div className="suggestion-box">
       <div className="suggestion-head">
         <span>اقتراح النظام: <b>{suggestion.category_name ?? "لا يوجد (غير مؤكد)"}</b></span>

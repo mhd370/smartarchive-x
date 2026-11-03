@@ -29,6 +29,7 @@ APPLICATION = ('src/smartarchive/api/', 'src/smartarchive/classification/', 'src
                'tests/test_synthetic_eval.py', 'docs/dean_requirements.md', 'docs/synthetic_evaluation.md',
                'tools/fetch_ocr_models.py', 'tools/ocr_engine_probe.py', 'tests/test_ranked_search.py',
                'tests/test_learned_classifier.py', 'tools/train_classifier.py',
+               'tests/test_reclassification.py',
                'README.md', 'CHANGELOG.md', 'docs/web_application.md',
                'requirements-api.txt', 'requirements-dev.txt', '.gitignore', '.env.example')
 

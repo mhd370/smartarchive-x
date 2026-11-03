@@ -286,4 +286,16 @@ MIGRATIONS = [(2, '''
         document_id UNINDEXED, page_no UNINDEXED, terms, tokenize='unicode61 remove_diacritics 2');
     CREATE VIRTUAL TABLE IF NOT EXISTS page_trigrams USING fts5(
         document_id UNINDEXED, page_no UNINDEXED, text, tokenize='trigram');
+'''),
+    # Sprint 9: dismissed reclassification proposals (accepting one is an ordinary decision).
+    (7, '''
+    CREATE TABLE IF NOT EXISTS reclassification_reviews (
+        id TEXT PRIMARY KEY, document_id TEXT NOT NULL REFERENCES documents(id),
+        suggestion_id TEXT NOT NULL REFERENCES classifications(id),
+        outcome TEXT NOT NULL CHECK(outcome IN ('dismissed')), reason TEXT NOT NULL,
+        actor TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(suggestion_id));
+    CREATE TRIGGER IF NOT EXISTS reclassification_reviews_no_update BEFORE UPDATE ON reclassification_reviews
+        BEGIN SELECT RAISE(ABORT,'reclassification reviews are append-only'); END;
+    CREATE TRIGGER IF NOT EXISTS reclassification_reviews_no_delete BEFORE DELETE ON reclassification_reviews
+        BEGIN SELECT RAISE(ABORT,'reclassification reviews are append-only'); END;
 ''')]

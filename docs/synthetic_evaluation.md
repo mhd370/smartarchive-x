@@ -90,12 +90,18 @@ BM25 alone raised recall but lowered MRR: many documents share most subject word
 signal separates them. Adding the exact ranking to the fusion recovered and exceeded the old MRR. The exact
 mode stays available.
 
-Test set (corpus_v2, `script/Arabic+ara` OCR text, run in Sprint 8): ranked Recall@10 46.3%, MRR@10 27.3%,
-nDCG@10 31.5%; exact 46.2%, 26.2%, 30.4%. Reference numbers: 8.8% in both modes. The development gain did
-not carry over. The two runs used different OCR text (`ara+eng` on the development set), so the cause is not
-yet separated: the OCR model's handling of digits, or a fusion tuned to corpus_v1. Re-running the development
-set's search on `script/Arabic+ara` text is the next check. Until then the gain on held-out data is about 1
-point of MRR and nDCG, and none in recall.
+Same comparison on `script/Arabic+ara` OCR text, the configuration chosen for OCR (Sprint 8):
+
+| Set | exact R@10 / MRR / nDCG | hybrid-rrf-v1 R@10 / MRR / nDCG | Reference numbers R@10 (both) |
+|---|---|---|---|
+| Development corpus_v1 (321 queries) | 51.2% / 31.0% / 34.7% | 51.4% / 33.6% / 36.9% | 6.7% |
+| Test corpus_v2 (430 queries) | 46.2% / 26.2% / 30.4% | 46.3% / 27.3% / 31.5% | 8.8% |
+
+The ranked search behaves the same on both sets, so it was not fitted to corpus_v1. The large gain above came
+from the `ara+eng` text: that model misreads more words, and the trigram ranking recovered them. The
+`script/Arabic` model reads words better, so exact matching already finds more (51% against 44%) and fusion adds
+little recall; it still ranks the right document higher (MRR +1 to +2.6 points). Reference numbers are the open
+problem: the OCR digit error is about 50%, and no ranking recovers a number that was read wrongly.
 
 ## Sprint 8: learned classifier (`tfidf-svm-v1`, ADR 0010)
 

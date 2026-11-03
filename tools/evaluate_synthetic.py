@@ -252,7 +252,7 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
         classified.append({'doc_id': entry['doc_id'], 'type': entry['type'], 'group': entry['group'],
                            'quality': entry['quality'], 'predicted': suggestion.get('category_id'),
                            'predicted_group': basis.get('group_id'), 'confidence': suggestion.get('confidence'),
-                           'reason': suggestion.get('reason')})
+                           'reason': suggestion.get('reason'), 'scores': suggestion.get('scores') or {}})
         per_doc.append({'doc_id': entry['doc_id'], 'file': entry['file'], 'type': entry['type'],
                         'quality': entry['quality'], 'layout': entry['layout'],
                         'cer': rate(doc_pages, 'cer'), 'predicted_type': suggestion.get('category_id'),
@@ -302,6 +302,7 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
                        for level in sorted({c['quality'] for c in classified})
                        for items in [[c for c in classified if c['quality'] == level]]},
         'confusion': [{'true': t, 'predicted': p, 'count': n} for (t, p), n in sorted(confusion.items())]}
+    classification['reclassification'] = reclassification_sweep(classified)
 
     predicted = [(back[s], back[t], kind) for s, t, kind in pipeline.predicted_relations() if s in back and t in back]
     from smartarchive.enrichment.duplicates import METHOD as relations_method
@@ -341,6 +342,39 @@ def pct(value) -> str:
     return '—' if value is None else f'{value * 100:.1f}%'
 
 
+def reclassification_sweep(classified: list[dict]) -> dict:
+    """How the reclassification gates behave if a person had confirmed each document with each category.
+
+    Every (document, confirmed category) pair is scored with the document's suggestion as the new evidence:
+    - confirmed correctly: any proposal is a false alarm;
+    - confirmed wrongly: a proposal to the true type is a catch, a proposal to another type is a wrong move.
+    The rates do not depend on how often people err; precision at a given error rate follows from them.
+    """
+    from smartarchive.classification import reclassify
+    types = sorted({c['type'] for c in classified})
+    grid = []
+    for min_confidence in (0.4, 0.5, 0.6, 0.7, 0.8):
+        for delta in (0.0, 0.1, 0.2, 0.3, 0.4, 0.5):
+            alarms = catches = wrong_moves = wrong_pairs = 0
+            for c in classified:
+                for confirmed in types:
+                    found = reclassify.proposal(confirmed, c['predicted'], c['reason'] or '', c['scores'],
+                                                min_confidence, delta)
+                    if confirmed == c['type']:
+                        alarms += bool(found)
+                    else:
+                        wrong_pairs += 1
+                        if found:
+                            catches += found['to_category_id'] == c['type']
+                            wrong_moves += found['to_category_id'] != c['type']
+            grid.append({'min_confidence': min_confidence, 'delta': delta,
+                         'false_alarm_rate': round(alarms / len(classified), 4),
+                         'catch_rate': round(catches / wrong_pairs, 4) if wrong_pairs else None,
+                         'wrong_move_rate': round(wrong_moves / wrong_pairs, 4) if wrong_pairs else None})
+    chosen = next(g for g in grid if g['min_confidence'] == reclassify.MIN_CONFIDENCE and g['delta'] == reclassify.DELTA)
+    return {'method': reclassify.METHOD, 'chosen': chosen, 'grid': grid}
+
+
 def markdown(report: dict) -> str:
     ocr, meta, cls, rel, search = (report[k] for k in ('ocr', 'metadata', 'classification', 'relations', 'search'))
     engine = report.get('ocr_engine') or {}
@@ -362,7 +396,17 @@ def markdown(report: dict) -> str:
                      f"{block['not_written_in_document']} |")
     lines += ['', f"## Classification ({cls.get('method', 'keywords')})", '',
               f"Accuracy {pct(cls['accuracy'])}, coverage {pct(cls['coverage'])}, precision when answered "
-              f"{pct(cls['precision_when_answered'])}, first level (group) {pct(cls['group_accuracy'])}.", '',
+              f"{pct(cls['precision_when_answered'])}, first level (group) {pct(cls['group_accuracy'])}.", '']
+    if cls.get('reclassification'):
+        chosen = cls['reclassification']['chosen']
+        lines += [f"Reclassification ({cls['reclassification']['method']}, share ≥ {chosen['min_confidence']}, "
+                  f"Δ ≥ {chosen['delta']}): wrong confirmations caught {pct(chosen['catch_rate'])}, false alarms on "
+                  f"correct confirmations {pct(chosen['false_alarm_rate'])}, proposals to another wrong type "
+                  f"{pct(chosen['wrong_move_rate'])}.", '',
+                  '| Share ≥ | Δ ≥ | Caught | False alarms | Wrong moves |', '|---|---|---|---|---|']
+        lines += [f"| {g['min_confidence']} | {g['delta']} | {pct(g['catch_rate'])} | {pct(g['false_alarm_rate'])} | "
+                  f"{pct(g['wrong_move_rate'])} |" for g in cls['reclassification']['grid']] + ['']
+    lines += [
               f"## Duplicates and versions ({rel.get('method', 'fingerprint')})", '', '| Kind | True | Suggested | Precision | Recall |',
               '|---|---|---|---|---|']
     for kind, block in rel.items():
