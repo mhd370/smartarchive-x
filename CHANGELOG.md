@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.13.0 — Sprint 8 / Task 013 (unreleased)
+- Learned classifier `tfidf-svm-v1` (ADR 0010): TF-IDF word uni/bigrams with a calibrated linear SVM, trained
+  on the documents whose category a person confirmed. It replaces the keyword baseline once trained, keeps
+  abstention (0.4) and the group-only answer, and explains each suggestion with the words that weighed most.
+  A suggestion never changes a confirmed category.
+- Held-out test set (corpus_v2, model trained on corpus_v1): accuracy 81.0% against 71.6% for keywords,
+  coverage 82.7% against 76.4%, precision when answered 98.0% against 93.7%.
+- `GET /api/classifier` (model card and confirmed examples per category) and `POST /api/admin/classifier/train`
+  (security event `classifier.trained`); the system page shows the model and a train button.
+- `tools/train_classifier.py` (archive or labelled corpus) and `tools/evaluate_synthetic.py --classifier-model`.
+- New API dependencies: scikit-learn 1.9.1, joblib 1.6.0.
+- Ranked search measured on the test set: Recall@10 46.3% against 46.2% exact; the development-set gain did
+  not carry over (see docs/synthetic_evaluation.md).
+
 ## 0.12.0 — Sprint 7 / Task 012 (unreleased)
 - Ranked search (`hybrid-rrf-v1`, ADR 0009), now the default. Results are a reciprocal-rank fusion of three
   rankings:

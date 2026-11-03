@@ -87,6 +87,10 @@ export type SearchPage = { page_no: number; source: TextSource; revision: number
   snippets: SnippetPart[][] };
 export type SearchItem = { document: DocumentRecord; score: number; filename_match: boolean; matched_pages: number;
   pages: SearchPage[] };
+export type ClassifierCard = { id: string; method: string; threshold: number; source: string; trained_at: string;
+  classes: string[]; examples: Record<string, number>; left_out: Record<string, number> };
+export type ClassifierInfo = { active_method: string; model: ClassifierCard | null;
+  confirmed_examples: Record<string, number>; min_per_category: number };
 export type SearchResult = { query: string; terms: string[]; items: SearchItem[]; total: number; limit: number;
   offset: number; truncated: boolean; mode: "ranked" | "exact"; method?: string };
 export type Revision = { id: string; version: number; base_source: TextSource; base_run_id: string | null; note: string;

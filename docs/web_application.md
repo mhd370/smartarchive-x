@@ -103,6 +103,8 @@ Root `.env.example` documents backend variables; they are read from the environm
 | POST `/api/documents/{uuid}/classification` *(008)* | Reviewer/archivist/admin: `{category_id, expected_sequence, reason}`; reason required to change a confirmed category; 409 on stale sequence |
 | POST `/api/documents/{uuid}/classification/suggest` *(008)* | Reviewer/archivist/admin: recompute the suggestion now |
 | GET `/api/classification/queue` *(008)* | Documents with an unconfirmed suggestion or no category; `category` filter also on `/api/documents` (`none` = unclassified) and `/api/search` |
+| GET `/api/classifier` *(013)* | Reader: active suggestion method, model card (classes, examples, training time, source) and confirmed documents per category |
+| POST `/api/admin/classifier/train` *(013)* | Admin: train `tfidf-svm-v1` on confirmed categories (422 `not_enough_examples` below 3 per category for 2 categories), recompute open suggestions; security event `classifier.trained` ([ADR 0010](adr/0010-learned-classifier.md)) |
 | GET/POST `/api/admin/backups` *(009)* | Admin: list backups / create a verified backup zip |
 | POST `/api/admin/backups/{name}/verify`, GET `.../download` *(009)* | Admin: verify every member and the database / download the zip |
 | POST `/api/admin/integrity` *(009)* | Admin: reconcile originals with the database; report only |

@@ -1,4 +1,4 @@
-# Synthetic evaluation results (Sprints 6–7)
+# Synthetic evaluation results (Sprints 6–8)
 
 All numbers are on **synthetic** documents (ADR 0008) and must be reported as such. Tesseract 5.5.3. Metric
 policy `normalized-v1`: diacritics and tatweel ignored on both sides. Reproduce with the commands in the README.
@@ -88,4 +88,32 @@ digits, severe scans and table reading order.
 
 BM25 alone raised recall but lowered MRR: many documents share most subject words, and only the whole-phrase
 signal separates them. Adding the exact ranking to the fusion recovered and exceeded the old MRR. The exact
-mode stays available. The test-set confirmation runs with the next full evaluation.
+mode stays available.
+
+Test set (corpus_v2, `script/Arabic+ara` OCR text, run in Sprint 8): ranked Recall@10 46.3%, MRR@10 27.3%,
+nDCG@10 31.5%; exact 46.2%, 26.2%, 30.4%. Reference numbers: 8.8% in both modes. The development gain did
+not carry over. The two runs used different OCR text (`ara+eng` on the development set), so the cause is not
+yet separated: the OCR model's handling of digits, or a fusion tuned to corpus_v1. Re-running the development
+set's search on `script/Arabic+ara` text is the next check. Until then the gain on held-out data is about 1
+point of MRR and nDCG, and none in recall.
+
+## Sprint 8: learned classifier (`tfidf-svm-v1`, ADR 0010)
+
+Trained once on all of corpus_v1's OCR text (440 documents, 49–58 per type), then applied to corpus_v2 with
+the same stored OCR text as the keyword run (`--classifier-model`, `--re-enrich`).
+
+| Test set corpus_v2 (606 documents) | keywords-v1 | tfidf-svm-v1 |
+|---|---|---|
+| Accuracy (abstentions count as wrong) | 71.6% | **81.0%** |
+| Coverage (documents answered) | 76.4% | **82.7%** |
+| Precision when answered | 93.7% | **98.0%** |
+| First level (group) | 80.4% | **86.8%** |
+| Born-digital / clean / mild | 85.1% / 87.8% / 91.1% | 99.2% / 97.8% / 100% |
+| Medium scans | 60.6% | 76.6% |
+| Severe scans | 12.1% | 2.2% |
+
+Development set, 5-fold grouped cross-validation: accuracy 82.9%, coverage 82.9%, precision 96.8%. The test
+result is within 2 points, so the model generalizes across corpora generated with different seeds. On severe
+scans the OCR text is almost empty, and the model abstains more often than the keywords did. It answers too
+few of them to be useful either way: these pages need better OCR or image features, not a better text model.
+

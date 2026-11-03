@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { apiUrl, post, type BackupItem, type BackupVerification, type IntegrityReport } from "@/lib/api";
+import { apiUrl, post, type BackupItem, type BackupVerification, type ClassifierInfo, type IntegrityReport } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/use-api";
 import { actors, bytes, date, number } from "@/lib/format";
@@ -17,6 +17,7 @@ export default function SystemPage() {
   const [busy, setBusy] = useState(""), [error, setError] = useState("");
   const [checks, setChecks] = useState<Record<string, BackupVerification>>({});
   const [report, setReport] = useState<IntegrityReport>();
+  const classifier = useApi<ClassifierInfo>(admin ? "/classifier" : null);
 
   async function run<T>(key: string, action: () => Promise<T>, done: (value: T) => void) {
     setBusy(key); setError("");
@@ -38,7 +39,7 @@ export default function SystemPage() {
           <p>أنشئ أول نسخة الآن، ثم تحقق منها ونزّلها إلى مكان آخر.</p></div> :
         <div className="table-scroll"><table><thead><tr><th>النسخة</th><th>المستندات</th><th>الحجم</th><th>أنشأها</th><th>التحقق</th><th><span className="sr-only">إجراءات</span></th></tr></thead>
           <tbody>{list.data!.items.map(item => { const check = checks[item.name]; return <tr key={item.name}>
-            <td><strong dir="ltr" className="backup-name">{item.name}</strong><small className="block muted">{item.created_at ? date(item.created_at) : date(item.modified_at)} · v{item.app_version || "?"} · مخطط {item.schema_version ?? "?"}</small></td>
+            <td><strong dir="ltr" className="backup-name">{item.name}</strong><br /><small className="muted">{item.created_at ? date(item.created_at) : date(item.modified_at)} · v{item.app_version || "?"} · مخطط {item.schema_version ?? "?"}</small></td>
             <td>{item.document_count === undefined ? "—" : number(item.document_count)}</td>
             <td className="nowrap">{bytes(item.size_bytes)}</td>
             <td dir="auto">{item.created_by ? actors(item.created_by) : "—"}</td>
@@ -73,6 +74,19 @@ export default function SystemPage() {
         {report.document_problems.length > 0 && <ul className="problem-list">{report.document_problems.map(item => <li key={item.document_id}>
           <Link href={`/documents/${item.document_id}`} dir="auto">{item.filename}</Link> — {problems[item.problem] ?? item.problem}</li>)}</ul>}
       </div>}
+    </section>
+    <section className="panel">
+      <div className="section-heading"><div><h2>المصنّف المتعلّم</h2>
+        <p>يتعلّم من الوثائق التي أكّد الموظفون تصنيفها، ويحل محل الكلمات المفتاحية بعد أول تدريب. يقترح فقط ولا يغيّر تصنيفًا مؤكَّدًا.</p></div>
+        <button className="button secondary" disabled={!!busy} onClick={() => run("train", () => post<ClassifierInfo["model"]>("/admin/classifier/train"), () => classifier.reload())}>
+          <Icon name="refresh" />{busy === "train" ? "جار التدريب…" : "تدريب على التصنيفات المؤكدة"}</button></div>
+      {classifier.loading ? <Loading /> : classifier.error ? <Failure message={classifier.error} retry={classifier.reload} /> : classifier.data && <dl className="quality-facts">
+        <div><dt>طريقة الاقتراح الحالية</dt><dd dir="ltr">{classifier.data.active_method}</dd></div>
+        <div><dt>آخر تدريب</dt><dd>{classifier.data.model ? date(classifier.data.model.trained_at) : "لم يُدرَّب بعد"}</dd></div>
+        <div><dt>الفئات في النموذج</dt><dd>{classifier.data.model ? number(classifier.data.model.classes.length) : "—"}</dd></div>
+        <div><dt>وثائق مؤكدة متاحة للتدريب</dt><dd>{number(Object.values(classifier.data.confirmed_examples).reduce((a, b) => a + b, 0))}
+          <br /><small className="muted">يلزم {number(classifier.data.min_per_category)} لكل فئة على الأقل</small></dd></div>
+      </dl>}
     </section>
   </>;
 }

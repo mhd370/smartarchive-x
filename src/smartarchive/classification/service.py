@@ -5,21 +5,32 @@
   person: confirming a suggestion, choosing another category, or reclassifying (a reason is required).
 - The document's current category comes from the view `document_categories`: the latest decision, else
   the latest suggestion (state `suggested`, or `uncertain` when the classifier abstained).
+- Suggestions come from the learned model (learned.py) once one has been trained on confirmed decisions, and
+  from the keyword baseline before that. Every suggestion records its method and, for the model, its id.
 """
 import hashlib
 import json
 import logging
+from pathlib import Path
 import re
 import uuid
 
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
+from . import learned
 from .classifier import DEFAULT_CATEGORIES, GROUPS, METHOD, TAXONOMY_VERSION, Category, classify
 
 log = logging.getLogger(__name__)
 SYSTEM = 'system:classifier'
 SLUG = re.compile(r'[a-z][a-z0-9_-]{1,39}')
 MAX_KEYWORDS, MAX_KEYWORD_LEN = 60, 60
+
+
+def _count(labels: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for label in labels:
+        counts[label] = counts.get(label, 0) + 1
+    return counts
 
 
 def _row(row) -> dict:
@@ -33,8 +44,66 @@ def _row(row) -> dict:
 
 
 class Classifications:
-    def __init__(self, db: Database, min_score: float = 3.0, min_confidence: float = 0.5):
+    def __init__(self, db: Database, min_score: float = 3.0, min_confidence: float = 0.5,
+                 models_dir: Path | None = None):
         self.db, self.min_score, self.min_confidence = db, min_score, min_confidence
+        self.models_dir = models_dir
+        self._model, self._model_stamp = None, None
+
+    # -- learned model --------------------------------------------------------------------------
+    def model(self) -> dict | None:
+        """The trained model, reloaded when its card changes on disk; None before the first training."""
+        if not self.models_dir:
+            return None
+        card = self.models_dir / 'classifier.json'
+        stamp = card.stat().st_mtime_ns if card.is_file() else None
+        if stamp != self._model_stamp:
+            try:
+                self._model = learned.load(self.models_dir) if stamp else None
+            except Exception:  # a damaged or incompatible model file falls back to the keyword baseline
+                log.exception('Could not load the classifier model; using keywords')
+                self._model = None
+            self._model_stamp = stamp
+        return self._model
+
+    def model_info(self) -> dict:
+        model = self.model()
+        return {'active_method': learned.METHOD if model else METHOD, 'model': model['card'] if model else None,
+                'confirmed_examples': _count(self.training_set()[2]), 'min_per_category': learned.MIN_PER_CLASS}
+
+    def training_set(self) -> tuple[list[str], list[str], list[str]]:
+        """(texts, filenames, labels) of documents a person classified (their latest decision) that have text."""
+        with self.db.connect() as db:
+            rows = db.execute("""SELECT d.filename, (SELECT category_id FROM classifications c
+                WHERE c.document_id=d.id AND c.kind='decision' ORDER BY c.sequence DESC LIMIT 1) AS label,
+                (SELECT group_concat(text, char(10)) FROM (SELECT text FROM page_texts t WHERE t.document_id=d.id
+                 ORDER BY page_no)) AS text FROM documents d ORDER BY d.created_at""").fetchall()
+        rows = [row for row in rows if row['label'] and row['text']]
+        return [r['text'] for r in rows], [r['filename'] for r in rows], [r['label'] for r in rows]
+
+    def train(self, actor: str) -> dict:
+        """Train on confirmed decisions, save the model and refresh every suggestion."""
+        if not self.models_dir:
+            raise ArchiveError('no_model_storage', 'لا يوجد مكان لحفظ النموذج.', 500)
+        texts, filenames, labels = self.training_set()
+        try:
+            model = learned.train(texts, filenames, labels, f'archive decisions ({len(labels)} documents) by {actor}')
+        except ValueError as exc:
+            raise ArchiveError('not_enough_examples', 'يلزم تأكيد ثلاث وثائق على الأقل من فئتين أو أكثر قبل التدريب.',
+                               422) from exc
+        learned.save(model, self.models_dir)
+        return {**model['card'], 'refreshed_suggestions': self.resuggest_all()}
+
+    def resuggest_all(self) -> int:
+        with self.db.connect() as db:
+            ids = [row[0] for row in db.execute('SELECT DISTINCT document_id FROM page_texts')]
+        done = 0
+        for document_id in ids:
+            try:
+                done += self.suggest(document_id, trigger='model') is not None
+            except Exception:
+                log.exception('Re-suggestion failed for %s', document_id)
+        return done
 
     # -- categories ---------------------------------------------------------------------------
     def seed(self):
@@ -181,6 +250,8 @@ class Classifications:
         stamp = db.execute('SELECT COALESCE(MAX(updated_at),\'\') FROM categories').fetchone()[0]
         stamp += '|' + (db.execute("SELECT group_concat(category_id || ':' || group_id, ',') FROM"
                                    ' (SELECT * FROM category_group_members ORDER BY category_id)').fetchone()[0] or '')
+        model = self.model()
+        stamp += '|' + (model['card'].get('id', '') if model else METHOD)  # a new model is new evidence
         digest = hashlib.sha256((text + '\x00' + stamp).encode()).hexdigest()
         basis = {'pages': len(rows), 'run_ids': sorted({row['run_id'] for row in rows if row['run_id']}),
                  'reviewed_pages': sum(1 for row in rows if row['source'] == 'review'),
@@ -202,9 +273,17 @@ class Classifications:
             categories = [Category(row['id'], row['name'], json.loads(row['keywords']), row['group_id']) for row in
                           db.execute('SELECT c.*, m.group_id FROM categories c LEFT JOIN category_group_members m'
                                      ' ON m.category_id=c.id WHERE c.active=1 ORDER BY c.id').fetchall()]
-            result = classify(text, document['filename'], categories, self.min_score, self.min_confidence)
+            model = self.model()
+            if model:
+                result = learned.predict(model, text, document['filename'], {c.id: c.group_id for c in categories},
+                                         {c.id for c in categories})
+                method = learned.METHOD
+                basis['model_id'] = model['card'].get('id')
+            else:
+                result = classify(text, document['filename'], categories, self.min_score, self.min_confidence)
+                method = METHOD
             record = {'id': str(uuid.uuid4()), 'document_id': document_id, 'kind': 'suggestion',
-                      'category_id': result.category_id, 'confidence': result.confidence, 'method': METHOD,
+                      'category_id': result.category_id, 'confidence': result.confidence, 'method': method,
                       'scores': json.dumps({k: v for k, v in result.candidates}, ensure_ascii=False),
                       'evidence': json.dumps(result.evidence, ensure_ascii=False),
                       'basis': json.dumps({**basis, 'trigger': trigger, 'outcome': result.reason,
