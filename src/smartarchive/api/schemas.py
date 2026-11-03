@@ -88,6 +88,11 @@ class ClassificationDecision(BaseModel):
     reason: str = ''
 
 
+class ReclassificationDismissal(BaseModel):
+    suggestion_id: str
+    reason: str = ''
+
+
 class FolderCreate(BaseModel):
     name: str
     parent_id: str | None = None

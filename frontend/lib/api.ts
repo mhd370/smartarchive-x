@@ -78,7 +78,13 @@ export type ClassificationRecord = { sequence: number; id: string; document_id: 
   basis: Record<string, unknown>; reason: string; actor: string; created_at: string };
 export type Classification = { document_id: string; state: CategoryState; category_id: string | null;
   category_name: string | null; sequence: number; suggestion: ClassificationRecord | null;
-  decision: ClassificationRecord | null; history: ClassificationRecord[] };
+  decision: ClassificationRecord | null; history: ClassificationRecord[]; reclassification: Reclassification | null };
+export type Reclassification = { method: string; from_category_id: string; to_category_id: string; share: number;
+  current_share: number; delta: number; min_confidence: number; min_delta: number; suggestion_id: string;
+  suggestion_sequence: number; suggested_at: string };
+export type ReclassificationQueue = { items: (Reclassification & { document_id: string; filename: string; created_at: string;
+  from_category_name: string | null; to_category_name: string | null })[]; total: number; limit: number; offset: number;
+  method: string; min_confidence: number; min_delta: number };
 export type ClassificationQueue = { items: { document_id: string; filename: string; page_count: number; created_at: string;
   state: CategoryState; category_id: string | null; category_name: string | null; confidence: number | null }[];
   total: number; limit: number; offset: number };

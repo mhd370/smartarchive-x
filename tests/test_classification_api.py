@@ -73,6 +73,27 @@ class ClassificationApiTests(unittest.TestCase):
         self.assertEqual(stats['classification']['confirmed'], 1)
         self.assertEqual(next(c for c in stats['categories'] if c['id'] == 'outgoing_letter')['confirmed'], 1)
 
+        # Sprint 9: a corrected page is new evidence; the strong disagreement is proposed, never applied.
+        self.assertEqual(reviewer.get('/api/classification/reclassification').json()['total'], 0)
+        page = viewer.get(f'/api/documents/{doc_id}/pages/1/text').json()
+        revised = reviewer.post(f'/api/documents/{doc_id}/pages/1/text', json={
+            'text': 'قرار إداري رقم ١٢ بشأن تشكيل لجنة. قررنا ما يلي: يُعمل بهذا القرار من تاريخه.',
+            'expected_version': page['version'], 'note': 'تصحيح'})
+        self.assertEqual(revised.status_code, 200, revised.text)
+        state = viewer.get(f'/api/documents/{doc_id}/classification').json()
+        self.assertEqual((state['category_id'], state['state']), ('outgoing_letter', 'confirmed'))
+        proposal = state['reclassification']
+        self.assertEqual((proposal['from_category_id'], proposal['to_category_id']), ('outgoing_letter', 'decision'))
+        self.assertEqual(viewer.get('/api/classification/reclassification').status_code, 403)
+        listed = reviewer.get('/api/classification/reclassification').json()
+        self.assertEqual([item['document_id'] for item in listed['items']], [doc_id])
+        dismiss = f'/api/documents/{doc_id}/classification/reclassification/dismiss'
+        self.assertEqual(viewer.post(dismiss, json={'suggestion_id': proposal['suggestion_id']}).status_code, 403)
+        kept = reviewer.post(dismiss, json={'suggestion_id': proposal['suggestion_id'], 'reason': 'كتاب يحيل القرار'})
+        self.assertEqual((kept.status_code, kept.json()['reclassification']), (200, None))
+        again = reviewer.post(dismiss, json={'suggestion_id': proposal['suggestion_id']})
+        self.assertEqual((again.status_code, again.json()['code']), (409, 'no_open_proposal'))
+
     def test_manual_suggestion_and_category_administration(self):
         doc_id = self.processed('مستند.png')
         reviewer, viewer = self.user('reviewer1', 'reviewer'), self.user('viewer1', 'viewer')

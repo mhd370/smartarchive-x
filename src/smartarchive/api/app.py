@@ -23,8 +23,8 @@ from smartarchive.services.documents import Documents, public_record
 from smartarchive.services.folders import Folders
 from .middleware import UploadLimitMiddleware
 from .schemas import (CategoryCreate, CategoryUpdate, ClassificationDecision, Credentials, Document, DocumentList,
-                      FolderAssign, FolderCreate, MetadataEdit, PageRevision, RelationReview, SetupRequest, Statistics,
-                      UserCreate, UserUpdate)
+                      FolderAssign, FolderCreate, MetadataEdit, PageRevision, ReclassificationDismissal,
+                      RelationReview, SetupRequest, Statistics, UserCreate, UserUpdate)
 
 COOKIE = 'sa_session'
 
@@ -38,7 +38,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db, models_dir=settings.storage_dir / 'models')
-    backups = Backups(settings.storage_dir, settings.backup_dir, '0.13.0')
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.14.0')
     folders = Folders(db)
     metadata = Metadata(db)
     relations = Relations(db, metadata)
@@ -72,7 +72,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.13.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.14.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations
@@ -351,6 +351,17 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     def classification_decide(document_id: UUID, body: ClassificationDecision, user: Reviewer):
         record = documents.get(str(document_id))
         return classes.decide(record['id'], body.category_id, body.reason, body.expected_sequence, user['username'])
+
+    # -- controlled reclassification (Sprint 9) -----------------------------------------------------
+    @api.get('/api/classification/reclassification')
+    def reclassification_queue(user: Reviewer, limit: int = Query(25, ge=1, le=100),
+                               offset: int = Query(0, ge=0, le=1_000_000)):
+        return classes.reclassification_queue(limit, offset)
+
+    @api.post('/api/documents/{document_id}/classification/reclassification/dismiss')
+    def reclassification_dismiss(document_id: UUID, body: ReclassificationDismissal, user: Reviewer):
+        record = documents.get(str(document_id))
+        return classes.dismiss(record['id'], body.suggestion_id, body.reason, user['username'])
 
     # -- operations and evaluation (Sprint 4) ----------------------------------------------------
     # -- learned classifier (Sprint 8) --------------------------------------------------------------

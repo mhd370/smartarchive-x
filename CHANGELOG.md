@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.14.0 — Sprint 9 / Task 014 (unreleased)
+- Controlled reclassification `reclass-delta-v1` (ADR 0011). New evidence that disagrees with a confirmed
+  category becomes a proposal when its share is at least 0.6 and exceeds the confirmed category's by Δ ≥ 0.3.
+  The category never changes by itself. A reviewer accepts the proposal (a reclassification with a reason) or
+  dismisses it; dismissals are kept append-only. Development set: 76.7% of wrong confirmations caught, 0.2%
+  false alarms on correct ones.
+- `GET /api/classification/reclassification` and `POST /api/documents/{id}/classification/reclassification/dismiss`;
+  the proposal appears on the document page and in a new section of the review page.
+- Migration 7: `reclassification_reviews`.
+- `tools/evaluate_synthetic.py` reports the reclassification gates (catches, false alarms, wrong moves) over a
+  threshold grid.
+- Search results explained (docs/synthetic_evaluation.md): on the same `script/Arabic+ara` text the ranked
+  search gains about 2 MRR points on both sets. The earlier 10-point recall gain came from the noisier
+  `ara+eng` OCR text.
+
 ## 0.13.0 — Sprint 8 / Task 013 (unreleased)
 - Learned classifier `tfidf-svm-v1` (ADR 0010): TF-IDF word uni/bigrams with a calibrated linear SVM, trained
   on the documents whose category a person confirmed. It replaces the keyword baseline once trained, keeps

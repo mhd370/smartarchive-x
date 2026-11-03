@@ -7,6 +7,8 @@
   the latest suggestion (state `suggested`, or `uncertain` when the classifier abstained).
 - Suggestions come from the learned model (learned.py) once one has been trained on confirmed decisions, and
   from the keyword baseline before that. Every suggestion records its method and, for the model, its id.
+- Reclassification (reclassify.py): a suggestion newer than the latest decision that disagrees with it strongly
+  enough is shown as a proposal. A person accepts it (a decision with a reason) or dismisses it.
 """
 import hashlib
 import json
@@ -17,7 +19,7 @@ import uuid
 
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
-from . import learned
+from . import learned, reclassify
 from .classifier import DEFAULT_CATEGORIES, GROUPS, METHOD, TAXONOMY_VERSION, Category, classify
 
 log = logging.getLogger(__name__)
@@ -339,21 +341,92 @@ class Classifications:
             if previous and not reason:
                 raise ArchiveError('reason_required', 'اذكر سبب إعادة التصنيف؛ التصنيف الحالي معتمد.', 422)
             agrees = bool(suggestion and suggestion['category_id'] == category_id)
+            open_proposal = self._proposal(db, previous, suggestion)
+            accepted = bool(open_proposal and open_proposal['to_category_id'] == category_id)
             record = {'id': str(uuid.uuid4()), 'document_id': document_id, 'kind': 'decision',
                       'category_id': category_id, 'confidence': None, 'method': 'human',
                       'scores': None, 'evidence': None,
                       'basis': json.dumps({'previous_category_id': previous['category_id'] if previous else None,
                                            'suggestion_id': suggestion['id'] if suggestion else None,
                                            'suggested_category_id': suggestion['category_id'] if suggestion else None,
-                                           'agrees_with_suggestion': agrees}),
+                                           'agrees_with_suggestion': agrees,
+                                           'accepted_reclassification': accepted}),
                       'reason': reason, 'actor': actor, 'created_at': now()}
             db.execute(f"INSERT INTO classifications ({','.join(record)}) VALUES ({','.join('?' for _ in record)})",
                        list(record.values()))
             action = 'classification.changed' if previous else 'classification.confirmed'
             self.db._event(db, document_id, action,
                            {'category_id': category_id, 'previous_category_id': previous['category_id'] if previous else None,
-                            'agrees_with_suggestion': agrees, 'reason': reason}, actor)
+                            'agrees_with_suggestion': agrees, 'accepted_reclassification': accepted,
+                            'reason': reason}, actor)
         return self.get(document_id)
+
+    # -- reclassification proposals (reclass-delta-v1) ------------------------------------------
+    @staticmethod
+    def _proposal(db, decision, suggestion) -> dict | None:
+        """The open proposal: a strong disagreeing suggestion made after the decision and not dismissed."""
+        if not decision or not suggestion or suggestion['sequence'] < decision['sequence']:
+            return None
+        if db.execute('SELECT 1 FROM reclassification_reviews WHERE suggestion_id=?', (suggestion['id'],)).fetchone():
+            return None
+        seen = db.execute("SELECT basis FROM classifications WHERE document_id=? AND kind='suggestion' AND sequence<?"
+                          ' ORDER BY sequence DESC LIMIT 1', (decision['document_id'], decision['sequence'])).fetchone()
+        if seen and json.loads(seen['basis']).get('digest') == json.loads(suggestion['basis']).get('digest'):
+            return None  # the person already decided against this evidence; only new evidence can reopen it
+        found = reclassify.proposal(decision['category_id'], suggestion['category_id'], suggestion['reason'],
+                                    json.loads(suggestion['scores'] or '{}'))
+        if found:
+            found.update({'suggestion_id': suggestion['id'], 'suggestion_sequence': suggestion['sequence'],
+                          'suggested_at': suggestion['created_at']})
+        return found
+
+    def _latest(self, db, document_id: str, kind: str):
+        return db.execute('SELECT * FROM classifications WHERE document_id=? AND kind=? ORDER BY sequence DESC'
+                          ' LIMIT 1', (document_id, kind)).fetchone()
+
+    def proposal(self, document_id: str) -> dict | None:
+        with self.db.connect() as db:
+            return self._proposal(db, self._latest(db, document_id, 'decision'),
+                                  self._latest(db, document_id, 'suggestion'))
+
+    def dismiss(self, document_id: str, suggestion_id: str, reason: str, actor: str) -> dict:
+        """Keep the confirmed category; the proposal from this suggestion is not shown again."""
+        reason = ' '.join((reason or '').split())
+        if len(reason) > 500:
+            raise ArchiveError('reason_too_long', 'السبب أطول من 500 حرف.', 422)
+        with self.db.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if not db.execute('SELECT 1 FROM documents WHERE id=?', (document_id,)).fetchone():
+                raise ArchiveError('not_found', 'المستند غير موجود.', 404)
+            found = self._proposal(db, self._latest(db, document_id, 'decision'),
+                                   self._latest(db, document_id, 'suggestion'))
+            if not found or found['suggestion_id'] != suggestion_id:
+                raise ArchiveError('no_open_proposal', 'لا يوجد اقتراح إعادة تصنيف مفتوح بهذا المعرّف؛ أعد التحميل.', 409)
+            db.execute('INSERT INTO reclassification_reviews VALUES (?,?,?,?,?,?,?)',
+                       (str(uuid.uuid4()), document_id, suggestion_id, 'dismissed', reason, actor, now()))
+            self.db._event(db, document_id, 'reclassification.dismissed',
+                           {'kept_category_id': found['from_category_id'], 'proposed_category_id': found['to_category_id'],
+                            'suggestion_id': suggestion_id, 'delta': found['delta'], 'reason': reason}, actor)
+        return self.get(document_id)
+
+    def reclassification_queue(self, limit: int, offset: int) -> dict:
+        """Confirmed documents with an open proposal, strongest evidence first."""
+        with self.db.connect() as db:
+            rows = db.execute(
+                "SELECT d.id, d.filename, d.created_at FROM documents d WHERE EXISTS (SELECT 1 FROM classifications c"
+                " WHERE c.document_id=d.id AND c.kind='suggestion' AND c.sequence > (SELECT MAX(sequence) FROM"
+                " classifications x WHERE x.document_id=d.id AND x.kind='decision'))").fetchall()
+            names = {row['id']: row['name'] for row in db.execute('SELECT id, name FROM categories')}
+            items = []
+            for row in rows:
+                found = self._proposal(db, self._latest(db, row['id'], 'decision'), self._latest(db, row['id'], 'suggestion'))
+                if found:
+                    items.append({'document_id': row['id'], 'filename': row['filename'], 'created_at': row['created_at'],
+                                  **found, 'from_category_name': names.get(found['from_category_id']),
+                                  'to_category_name': names.get(found['to_category_id'])})
+        items.sort(key=lambda item: (-item['delta'], item['document_id']))
+        return {'items': items[offset:offset + limit], 'total': len(items), 'limit': limit, 'offset': offset,
+                'method': reclassify.METHOD, 'min_confidence': reclassify.MIN_CONFIDENCE, 'min_delta': reclassify.DELTA}
 
     def has_decision(self, document_id: str) -> bool:
         with self.db.connect() as db:
@@ -372,7 +445,8 @@ class Classifications:
         history = [_row(row) for row in history]
         suggestion = next((item for item in history if item['kind'] == 'suggestion'), None)
         decision = next((item for item in history if item['kind'] == 'decision'), None)
-        return {'document_id': document_id,
+        proposal = self.proposal(document_id) if decision else None
+        return {'document_id': document_id, 'reclassification': proposal,
                 'state': current['state'] if current else 'none',
                 'category_id': current['category_id'] if current else None,
                 'category_name': current['category_name'] if current else None,
