@@ -155,7 +155,7 @@ class Pipeline:
         self.documents, self.folders, self.texts = Documents(self.db, self.store), Folders(self.db), PageTexts(self.db)
         self.metadata = Metadata(self.db)
         self.relations = Relations(self.db, self.metadata)
-        self.classes = Classifications(self.db)
+        self.classes = Classifications(self.db, models_dir=settings.storage_dir / 'models')
         self.classes.seed()
         self.ocr = OcrService(self.db, self.store, settings, engine_factory, self.texts)
         self.ocr.on_ready = self.enrich
@@ -186,7 +186,7 @@ class Pipeline:
 
 def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=None, log=print,
              languages: str | None = None, tessdata: Path | None = None, re_enrich: bool = False,
-             dpi: int | None = None) -> dict:
+             dpi: int | None = None, classifier_model: Path | None = None) -> dict:
     from smartarchive.operations.evaluation import _measure
     manifest = json.loads((corpus / 'manifest.json').read_text(encoding='utf-8'))
     entries = manifest['documents'][:limit] if limit else manifest['documents']
@@ -199,6 +199,12 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
         raise SystemExit(f'OCR engine unavailable: {pipeline.ocr._engine_error}')
     if pipeline.ocr.info().get('missing_languages'):
         raise SystemExit(f"OCR languages not installed: {pipeline.ocr.info()['missing_languages']}")
+    if classifier_model:  # a model trained elsewhere (e.g. on corpus_v1) classifies this corpus
+        import shutil
+        target = work / 'storage' / 'models'
+        target.mkdir(parents=True, exist_ok=True)
+        for name in ('classifier.joblib', 'classifier.json'):
+            shutil.copy2(classifier_model / name, target / name)
     state_path = work / 'state.json'
     state = json.loads(state_path.read_text(encoding='utf-8')) if state_path.exists() else {'ids': {}}
     started = time.time()
@@ -284,11 +290,10 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
         metadata['by_quality'][level] = meta_block([r for r in metadata_rows if r['quality'] == level and r['in_text']])
     metadata['errors_sample'] = [r for r in metadata_rows if r['in_text'] and not r['correct']][:40]
 
-    from smartarchive.classification.classifier import METHOD as classifier_method
     answered = [c for c in classified if c['predicted']]
     confusion = Counter((c['type'], c['predicted'] or '(abstained)') for c in classified)
     classification = {
-        'method': classifier_method, 'documents': len(classified), 'coverage': mean(1.0 if c['predicted'] else 0.0 for c in classified),
+        'method': pipeline.classes.model_info()['active_method'], 'documents': len(classified), 'coverage': mean(1.0 if c['predicted'] else 0.0 for c in classified),
         'accuracy': mean(1.0 if c['predicted'] == c['type'] else 0.0 for c in classified),
         'precision_when_answered': mean(1.0 if c['predicted'] == c['type'] else 0.0 for c in answered),
         'group_accuracy': mean(1.0 if c['predicted_group'] == c['group'] else 0.0 for c in classified),
@@ -384,6 +389,8 @@ def main(argv=None) -> int:
     parser.add_argument('--languages', help='Tesseract languages, e.g. ara+eng or script/Arabic+ara')
     parser.add_argument('--tessdata', type=Path, help='models folder (see tools/fetch_ocr_models.py)')
     parser.add_argument('--dpi', type=int, help='PDF rendering resolution for OCR (default: SMARTARCHIVE_OCR_DPI or 200)')
+    parser.add_argument('--classifier-model', type=Path,
+                        help='model folder from tools/train_classifier.py (default: keyword baseline)')
     parser.add_argument('--re-enrich', action='store_true',
                         help='re-run metadata, classification and relations on the stored text (no new OCR)')
     args = parser.parse_args(argv)
@@ -394,8 +401,10 @@ def main(argv=None) -> int:
         (('_' + args.languages.replace('/', '-').replace('+', '_')) if args.languages else '') + \
         (f'_{args.dpi}dpi' if args.dpi else '')
     work = (args.work or ROOT / 'results' / 'synthetic_eval' / (corpus.name + suffix)).resolve()
+    model = args.classifier_model.resolve() if args.classifier_model else None
     report = evaluate(corpus, work, args.limit, languages=args.languages, tessdata=args.tessdata,
-                      re_enrich=args.re_enrich, dpi=args.dpi, log=lambda *items: print(*items, flush=True))  # progress in logs
+                      re_enrich=args.re_enrich, dpi=args.dpi, classifier_model=model,
+                      log=lambda *items: print(*items, flush=True))  # progress in logs
     print(markdown(report))
     print(f'Report: {work / "report.json"}')
     return 0

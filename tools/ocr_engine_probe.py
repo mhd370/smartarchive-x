@@ -60,8 +60,12 @@ class Paddle:
         import paddleocr
         from paddleocr import PaddleOCR
         self.version = getattr(paddleocr, '__version__', '?')
+        # enable_mkldnn=False: Paddle 3.x on Windows CPU fails in oneDNN ("ConvertPirAttribute2RuntimeAttribute").
+        # The mobile detector: the server one takes minutes per page on a CPU without oneDNN.
         self.ocr = PaddleOCR(lang='ar', use_doc_orientation_classify=False, use_doc_unwarping=False,
-                             use_textline_orientation=False)
+                             use_textline_orientation=False, enable_mkldnn=False,
+                             text_detection_model_name='PP-OCRv5_mobile_det',
+                             text_recognition_model_name='arabic_PP-OCRv5_mobile_rec')  # names override `lang`
 
     def lines(self, image):
         import numpy as np
@@ -147,8 +151,17 @@ def main(argv=None) -> int:
             print(f'{name}: cannot load: {exc}', flush=True)
             continue
         rows, started = [], time.time()
-        for entry, page_no, image, truth in pages:
+        try:
+            engine.lines(pages[0][2])  # warm-up; a runtime failure is reported like a load failure
+        except Exception as exc:
+            report['engines'][name] = {'error': f'{type(exc).__name__}: {exc}'[:400]}
+            print(f'{name}: fails at run time: {exc}', flush=True)
+            continue
+        started = time.time()
+        for number, (entry, page_no, image, truth) in enumerate(pages, 1):
             lines = engine.lines(image)
+            if number % 5 == 0:
+                print(f'  {name}: {number}/{len(pages)} pages, {time.time() - started:.0f}s', flush=True)
             forward = '\n'.join(lines)
             backward = '\n'.join(line[::-1] for line in lines)
             measured = {'forward': _measure(truth, forward), 'reversed': _measure(truth, backward)}
