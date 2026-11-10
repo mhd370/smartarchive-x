@@ -77,7 +77,14 @@ class TesseractEngine:
         return self._version
 
     def recognize(self, image: Image.Image) -> list[Line]:
-        data = self._tess.image_to_data(image, lang=self.languages, config=self._config + '--oem 1 --psm 3',
+        return self._read(image, 3)
+
+    def recognize_block(self, image: Image.Image) -> list[Line]:
+        """A region read as one uniform block of text (psm 6), e.g. a table cell (layout.py)."""
+        return self._read(image, 6)
+
+    def _read(self, image: Image.Image, psm: int) -> list[Line]:
+        data = self._tess.image_to_data(image, lang=self.languages, config=self._config + f'--oem 1 --psm {psm}',
                                         output_type=self._tess.Output.DICT, timeout=self.timeout)
         groups: dict[tuple[int, int, int], list[Word]] = {}
         for index, raw in enumerate(data['text']):

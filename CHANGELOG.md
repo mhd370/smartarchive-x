@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0 — Sprint 10 / Task 015 (unreleased)
+- Layout analysis `layout-v1` (ADR 0012): ruled tables found from their ruling lines and read cell by cell,
+  right to left; two-column sections whose lines psm 3 merged are split at the gutter and read right column
+  first. Recorded as a `layout` processing step; `SMARTARCHIVE_LAYOUT=0` turns it off. Test set CER 27.5% →
+  25.8% (tables 40.7% → 33.3%, two columns 32.6% → 30.4%, simple pages unchanged).
+- Supporting evidence on the page: a search result opens its matching page and outlines the lines that hold the
+  query's words on the page image (the `page` and `q` link parameters were previously ignored).
+- Evaluation fix: `tools/evaluate_synthetic.py` now back-fills the ranked indexes before scoring. Archives OCR'd
+  before ranked search had been scored with the exact signal only. The corrected development figure is ranked
+  Recall@10 60.1% against 51.2% exact, and 35.4% against 6.7% on reference numbers. The Sprint 8 note that
+  ranked ≈ exact is withdrawn.
+- Second OCR engines compared on 40 development pages: PaddleOCR 40.9% and EasyOCR 43.2% CER against
+  Tesseract's 30.8%, and 7–40× slower; Tesseract stays.
+
 ## 0.14.0 — Sprint 9 / Task 014 (unreleased)
 - Controlled reclassification `reclass-delta-v1` (ADR 0011). New evidence that disagrees with a confirmed
   category becomes a proposal when its share is at least 0.6 and exceeds the confirmed category's by Δ ≥ 0.3.

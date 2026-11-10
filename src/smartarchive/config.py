@@ -39,6 +39,8 @@ class Settings:
     # (born-digital CER 12.9% vs 17.1% with script/Arabic+ara; ADR 0008).
     ocr_dpi: int = 200
     ocr_page_timeout_seconds: int = 120
+    # Ruled tables cell by cell and two-column reading order (processing/layout.py, ADR 0012).
+    layout_analysis: bool = True
     review_confidence_threshold: float = 0.60
     quality_weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)
 
@@ -67,4 +69,5 @@ class Settings:
                    tessdata_dir=Path(os.environ['SMARTARCHIVE_TESSDATA_DIR']).resolve()
                    if os.getenv('SMARTARCHIVE_TESSDATA_DIR') else None,
                    ocr_auto=flag('SMARTARCHIVE_OCR_AUTO', 'true'),
+                   layout_analysis=flag('SMARTARCHIVE_LAYOUT', 'true'),
                    ocr_worker=flag('SMARTARCHIVE_OCR_WORKER', 'true'))

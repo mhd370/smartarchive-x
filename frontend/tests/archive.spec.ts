@@ -126,6 +126,11 @@ test("extracted Arabic text is searchable and a correction becomes the searchabl
   await page.screenshot({ path: info.outputPath("search-results.png"), fullPage: true });
 
   await result.getByRole("link", { name: /الصفحة/ }).first().click();
+  // The page opens with the supporting lines outlined on the scan.
+  await expect(page).toHaveURL(/[?&]q=/);
+  await expect(page.locator(".evidence-tag")).toBeVisible({ timeout: 30_000 });
+  expect(await page.locator(".ocr-box.evidence").count()).toBeGreaterThan(0);
+  await page.screenshot({ path: info.outputPath("search-evidence.png"), fullPage: true });
   await page.getByRole("button", { name: "تصحيح النص", exact: true }).click();
   const editor = page.getByLabel("نص الصفحة بعد التصحيح", { exact: true });
   const original = await editor.inputValue();

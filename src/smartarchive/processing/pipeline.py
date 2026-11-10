@@ -14,6 +14,7 @@ from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
 from smartarchive.persistence.storage import OriginalStore
 from .ocr import Engine, TesseractEngine, Word, mean_confidence
+from .layout import read_page
 from .preprocess import prepare
 from .quality import BOUNDS, assess
 from .render import page_images
@@ -60,7 +61,8 @@ class OcrService:
                     'missing_languages': None, 'error': self._engine_error}
         return {'configured': True, 'engine': engine.name, 'version': engine.version(),
                 'languages': getattr(engine, 'languages', None),
-                'missing_languages': getattr(engine, 'missing', []), 'error': None}
+                'missing_languages': getattr(engine, 'missing', []), 'error': None,
+                'layout': 'layout-v1' if self.settings.layout_analysis else 'none'}
 
     # -- queue ----------------------------------------------------------------------------------
     def enqueue(self, document: dict, actor: str, trigger: str) -> dict:
@@ -140,7 +142,12 @@ class OcrService:
             if not quality.blank:
                 prepared = prepare(image, quality, self.settings.tesseract)
                 steps = prepared.steps
-                for line in engine.recognize(prepared.image):
+                if self.settings.layout_analysis:
+                    recognized, layout_step = read_page(engine, prepared.image)
+                    steps = steps + [layout_step]
+                else:
+                    recognized = engine.recognize(prepared.image)
+                for line in recognized:
                     words = [{'text': w.text, 'confidence': w.confidence,
                               'box': prepared.to_original(w.box, width, height)} for w in line.words]
                     lines.append((line.text, line.confidence, prepared.to_original(line.box, width, height), words))
