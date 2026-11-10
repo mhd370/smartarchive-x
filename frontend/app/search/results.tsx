@@ -59,7 +59,7 @@ export default function SearchResults() {
           </div>
           {resource.data.total === 0 ? <div className="empty-state"><div className="empty-icon"><Icon name="search" /></div><h3>لا توجد نتائج مطابقة</h3>
             <p>جرّب كلمات أقل أو جزءًا من الكلمة. النصوص الآلية قد تحتوي أخطاء قراءة؛ تصحيحها من صفحة المستند يحسّن البحث.</p></div>
-            : <ol className="search-results">{resource.data.items.map(item => <Result key={item.document.id} item={item} />)}</ol>}
+            : <ol className="search-results">{resource.data.items.map(item => <Result key={item.document.id} item={item} query={query} />)}</ol>}
           {resource.data.total > PAGE_SIZE && <div className="pagination">
             <span>عرض {number(offset + 1)}–{number(offset + resource.data.items.length)} من {number(resource.data.total)}</span>
             <div><button className="button secondary compact" disabled={offset === 0} onClick={() => go(query, Math.max(0, offset - PAGE_SIZE))}>السابق</button>
@@ -70,7 +70,7 @@ export default function SearchResults() {
   </>;
 }
 
-function Result({ item }: { item: SearchItem }) {
+function Result({ item, query }: { item: SearchItem; query: string }) {
   const doc = item.document;
   return <li className="search-result">
     <div className="result-head">
@@ -81,7 +81,7 @@ function Result({ item }: { item: SearchItem }) {
     {item.filename_match && <p className="match-note"><Icon name="file" />الكلمات واردة في اسم الملف.</p>}
     {item.pages.map(page => <div key={page.page_no} className="page-hit">
       <div className="page-hit-head">
-        <Link className="text-link" href={`/documents/${doc.id}?page=${page.page_no}`}>الصفحة {number(page.page_no)}<Icon name="arrow" /></Link>
+        <Link className="text-link" href={`/documents/${doc.id}?${new URLSearchParams({ page: String(page.page_no), q: query })}`}>الصفحة {number(page.page_no)}<Icon name="arrow" /></Link>
         <span className={`source-tag source-${page.source}`}>{sources[page.source]}</span>
         <span className="muted">{page.match_count ? `${number(page.match_count)} تطابق` : "تطابق تقريبي"}</span>
       </div>

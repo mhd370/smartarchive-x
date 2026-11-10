@@ -5,7 +5,7 @@ import { apiUrl, patch, post, type AuditEvent, type DocumentRecord, type Folder,
   type PageAnalysis, type Processing } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/use-api";
-import { actors, bytes, date, decimal, number, percent, reasons } from "@/lib/format";
+import { actors, bytes, date, decimal, matchWords, number, percent, reasons } from "@/lib/format";
 import { Icon } from "@/components/icons";
 import { Failure, FileSymbol, Loading, StatusBadge } from "@/components/ui";
 import { PageReview } from "@/components/page-review";
@@ -36,14 +36,14 @@ const layouts = { simple: "عمود واحد", multi_column: "متعدد الأ�
 const dpiSources = { metadata: "من بيانات الملف", rendered: "دقة التحويل من PDF", estimated_a4: "تقدير بافتراض A4" };
 const tone = (value: number | null) => value === null ? "unknown" : value >= 0.85 ? "good" : value >= 0.6 ? "fair" : "low";
 
-export default function Detail({ id }: { id: string }) {
+export default function Detail({ id, initialPage = 1, query = "" }: { id: string; initialPage?: number; query?: string }) {
   const { can } = useAuth();
   const resource = useApi<DocumentRecord>(`/documents/${id}`);
   const [active, setActive] = useState(false);
   const processing = useApi<Processing>(`/documents/${id}/status`, active ? 2000 : false);
   const summary = useApi<OcrSummary>(`/documents/${id}/ocr`, active ? 2000 : false);
   const audit = useApi<{ items: AuditEvent[] }>(`/documents/${id}/audit`);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [previewError, setPreviewError] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [showBoxes, setShowBoxes] = useState(true);
@@ -102,6 +102,7 @@ export default function Detail({ id }: { id: string }) {
   </>;
   const doc = resource.data!;
   const lines = ocrPage.data?.lines ?? [];
+  const matched = new Set(query ? lines.filter(line => matchWords(line.text, query)).map(line => line.line_no) : []);
 
   return <>
     <Link href="/documents" className="text-link back-link">المستندات<Icon name="arrow" /></Link>
@@ -120,6 +121,7 @@ export default function Detail({ id }: { id: string }) {
         <div className="section-heading">
           <div><h2>معاينة المستند</h2><p>معاينة مرئية من الأصل · الملف الأصلي متاح للتنزيل دون تعديل</p></div>
           <div className="preview-tools">
+            {matched.size > 0 && <span className="evidence-tag" role="status">مظلّل: {number(matched.size)} سطر يحوي «<span dir="auto">{query}</span>»</span>}
             {lines.length > 0 && <label className="toggle"><input type="checkbox" checked={showBoxes} onChange={e => setShowBoxes(e.target.checked)} />إظهار مواقع النص</label>}
             <span className="neutral-tag">الصفحة {number(page)} من {number(doc.page_count)}</span>
           </div>
@@ -133,7 +135,7 @@ export default function Detail({ id }: { id: string }) {
                 onLoad={() => setPreviewLoading(false)}
                 onError={() => { setPreviewError(true); setPreviewLoading(false); }} />
               {showBoxes && lines.map(line => <span key={line.line_no} aria-hidden="true"
-                className={`ocr-box tone-${tone(line.confidence)} ${focused === line.line_no ? "focused" : ""}`}
+                className={`ocr-box tone-${tone(line.confidence)} ${focused === line.line_no ? "focused" : ""} ${matched.has(line.line_no) ? "evidence" : ""}`}
                 style={{ left: `${line.box[0] * 100}%`, top: `${line.box[1] * 100}%`,
                   width: `${(line.box[2] - line.box[0]) * 100}%`, height: `${(line.box[3] - line.box[1]) * 100}%` }}
                 onMouseEnter={() => setFocused(line.line_no)} onMouseLeave={() => setFocused(undefined)} />)}

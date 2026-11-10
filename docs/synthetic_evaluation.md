@@ -1,4 +1,4 @@
-# Synthetic evaluation results (Sprints 6–8)
+# Synthetic evaluation results (Sprints 6–10)
 
 All numbers are on **synthetic** documents (ADR 0008) and must be reported as such. Tesseract 5.5.3. Metric
 policy `normalized-v1`: diacritics and tatweel ignored on both sides. Reproduce with the commands in the README.
@@ -90,18 +90,20 @@ BM25 alone raised recall but lowered MRR: many documents share most subject word
 signal separates them. Adding the exact ranking to the fusion recovered and exceeded the old MRR. The exact
 mode stays available.
 
-Same comparison on `script/Arabic+ara` OCR text, the configuration chosen for OCR (Sprint 8):
+Same comparison on `script/Arabic+ara` OCR text, the configuration chosen for OCR. **Correction (Sprint 10):**
+the Sprint 8 version of this table reported ranked ≈ exact on both sets. That was a measurement error, not a
+property of the search. `tools/evaluate_synthetic.py` scored archives that had been OCR'd before ranked search
+existed without back-filling their ranked indexes, which the API does at start-up. Ranked search then ran on
+the exact signal alone. The evaluator now back-fills before scoring. The corrected runs, without layout analysis:
 
-| Set | exact R@10 / MRR / nDCG | hybrid-rrf-v1 R@10 / MRR / nDCG | Reference numbers R@10 (both) |
+| Set | exact R@10 / MRR / nDCG | hybrid-rrf-v1 R@10 / MRR / nDCG | Reference numbers R@10 exact → ranked |
 |---|---|---|---|
-| Development corpus_v1 (321 queries) | 51.2% / 31.0% / 34.7% | 51.4% / 33.6% / 36.9% | 6.7% |
-| Test corpus_v2 (430 queries) | 46.2% / 26.2% / 30.4% | 46.3% / 27.3% / 31.5% | 8.8% |
+| Development corpus_v1 (321 queries) | 51.2% / 31.0% / 34.7% | **60.1% / 37.1% / 41.9%** | 6.7% → **35.4%** |
+| Test corpus_v2 (430 queries) | 46.2% / 26.2% / 30.4% | **54.2% / 31.4% / 36.1%** | 8.8% → **29.8%** |
 
-The ranked search behaves the same on both sets, so it was not fitted to corpus_v1. The large gain above came
-from the `ara+eng` text: that model misreads more words, and the trigram ranking recovered them. The
-`script/Arabic` model reads words better, so exact matching already finds more (51% against 44%) and fusion adds
-little recall; it still ranks the right document higher (MRR +1 to +2.6 points). Reference numbers are the open
-problem: the OCR digit error is about 50%, and no ranking recovers a number that was read wrongly.
+Ranked search adds 8–9 points of Recall@10 on both sets. Most of the gain is on reference numbers: the
+trigram ranking finds a number even when OCR misread one or two of its digits. The Sprint 8 conclusion that
+the gain came only from the noisier `ara+eng` text is withdrawn.
 
 ## Sprint 8: learned classifier (`tfidf-svm-v1`, ADR 0010)
 
@@ -122,4 +124,40 @@ Development set, 5-fold grouped cross-validation: accuracy 82.9%, coverage 82.9%
 result is within 2 points, so the model generalizes across corpora generated with different seeds. On severe
 scans the OCR text is almost empty, and the model abstains more often than the keywords did. It answers too
 few of them to be useful either way: these pages need better OCR or image features, not a better text model.
+
+## Sprint 10: layout analysis (`layout-v1`, ADR 0012)
+
+Full OCR runs again with layout analysis (`--work corpus_v1_layout`, `corpus_v2_layout`), compared with the
+earlier runs without it. Same Tesseract 5.5.3, `script/Arabic+ara`, 200 dpi.
+
+| CER | Dev without | Dev with | Test without | Test with |
+|---|---|---|---|---|
+| All pages | 26.1% | **24.6%** | 27.5% | **25.8%** |
+| Tables | 40.8% | **33.6%** | 40.7% | **33.3%** |
+| Two columns | 31.0% | **29.1%** | 32.6% | **30.4%** |
+| Simple | 21.3% | 21.3% | 22.9% | 22.7% |
+| Born-digital | 12.9% | **10.9%** | 11.4% | **10.5%** |
+| Severe scans | 92.3% | 92.3% | 93.0% | 93.0% |
+
+On the test set, layout analysis also changes these:
+- classification (`tfidf-svm-v1`) 81.0% → 81.5%, still 98.0% precise when answered;
+- ranked search Recall@10 54.2% → 54.9%, reference numbers unchanged at 29.8%.
+
+The gain is smaller than on the 29-page development sample used to build it, where tables went from 22% to 12%.
+On medium and severe scans the ruling lines are often too broken to be found, and those pages keep psm 3. Simple
+pages are unchanged in both sets, so the detector does not misfire on them.
+
+### Second OCR engines (development sample, 40 pages)
+
+| Engine | CER | Digit CER | s/page | Born-digital | Clean | Mild | Medium | Severe |
+|---|---|---|---|---|---|---|---|---|
+| Tesseract 5.5.3 `script/Arabic+ara` | **30.8%** | **52.6%** | **3.2** | 10.3% | **6.1%** | 14.5% | **30.5%** | **85.8%** |
+| PaddleOCR 3.7 (PP-OCRv5 mobile, Arabic) | 40.9% | 72.9% | 22.5 | 8.6% | 24.5% | 9.5% | 54.4% | 98.7% |
+| EasyOCR 1.7.2 | 43.2% | 53.8% | ≈ 120* | **7.6%** | 21.7% | **6.3%** | 74.7% | 100% |
+
+\* EasyOCR was measured at about 2 minutes per page on this CPU. The logged figure is inflated by the laptop
+sleeping during the run.
+
+Tesseract stays the engine. The other two read born-digital and mildly degraded pages slightly better. With 8
+pages per quality level that is not conclusive, and they are 7–40× slower and much worse on scans.
 

@@ -30,3 +30,20 @@ export const suggestionOutcomes: Record<string, string> = {
   ambiguous: "أكثر من فئة متقاربة", group_only: "المجموعة واضحة والنوع غير مؤكد", no_keywords: "لا توجد كلمات مفتاحية معروفة في النص", no_text: "لا يوجد نص",
 };
 export const sources = { ocr: "نص آلي (OCR)", review: "نص مُراجَع بشريًا" } as const;
+
+/** The same folding as the server's search (search/arabic.py): no diacritics or tatweel, one alef, ى→ي, ة→ه,
+ * Arabic-Indic and Persian digits as ASCII. Used to outline the lines of a page that hold a query's words. */
+export function normalizeArabic(text: string) {
+  return text.normalize("NFC")
+    .replace(/[\u064B-\u065F\u0670\u0640\u06D6-\u06ED\u200B-\u200F\u061C\uFEFF]/g, "")
+    .replace(/[\u0623\u0625\u0622\u0671]/g, "\u0627").replace(/\u0649/g, "\u064A").replace(/\u0629/g, "\u0647")
+    .replace(/\u0624/g, "\u0648").replace(/\u0626/g, "\u064A")
+    .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, d => String(d.charCodeAt(0) - 0x06F0))
+    .toLowerCase();
+}
+
+export function matchWords(line: string, query: string) {
+  const text = normalizeArabic(line);
+  return normalizeArabic(query).split(/[\s،,؛;:]+/).some(word => (word.length >= 3 || /^\d{2,}$/.test(word)) && text.includes(word));
+}

@@ -38,7 +38,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db, models_dir=settings.storage_dir / 'models')
-    backups = Backups(settings.storage_dir, settings.backup_dir, '0.14.0')
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.15.0')
     folders = Folders(db)
     metadata = Metadata(db)
     relations = Relations(db, metadata)
@@ -72,7 +72,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         yield
         worker.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.14.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.15.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations

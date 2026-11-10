@@ -219,6 +219,9 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
         if done % 10 == 0:
             log(f'  OCR {done} documents, {time.time() - started:.0f}s')
     log(f'OCR finished ({done} documents this session, {time.time() - started:.0f}s). Scoring...')
+    # As the API does at start-up: archives OCR'd before ranked search existed get their indexes back-filled.
+    # Without this, ranked search on such an archive silently fell back to the exact signal alone.
+    pipeline.texts.ensure_indexed()
     ids = state['ids']
     back = {value: key for key, value in ids.items()}
     if re_enrich:  # new extraction rules or classifier on the stored OCR text, without running OCR again
@@ -329,7 +332,7 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
     report = {'corpus': str(corpus), 'generator': manifest.get('generator'), 'seed': manifest.get('seed'),
               'synthetic': True, 'documents': len(entries), 'pages': len(pages),
               'finished_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
-              'ocr_engine': {k: pipeline.ocr.info().get(k) for k in ('engine', 'version', 'languages')},
+              'ocr_engine': {k: pipeline.ocr.info().get(k) for k in ('engine', 'version', 'languages', 'layout')},
               'tessdata_dir': str(pipeline.ocr.settings.tessdata_dir or ''), 'pdf_render_dpi': pipeline.ocr.settings.ocr_dpi,
               'ocr': ocr, 'metadata': metadata,
               'classification': classification, 'relations': relations, 'search': search, 'documents_detail': per_doc}
@@ -381,7 +384,7 @@ def markdown(report: dict) -> str:
     lines = [f"# Synthetic evaluation ({report['generator']}, seed {report['seed']})", '',
              f"{report['documents']} documents, {report['pages']} pages. **Synthetic data**: report as such. "
              f"OCR: {engine.get('engine')} {engine.get('version')}, languages `{engine.get('languages')}`, "
-             f"PDF pages rendered at {report.get('pdf_render_dpi')} dpi.", '',
+             f"PDF pages rendered at {report.get('pdf_render_dpi')} dpi, layout analysis `{engine.get('layout', 'none')}`.", '',
              '## OCR (CER / WER, normalized-v1)', '', '| Split | Pages | CER | WER |', '|---|---|---|---|',
              f"| all | {ocr['all']['pages']} | {pct(ocr['all']['cer'])} | {pct(ocr['all']['wer'])} |"]
     for key in ('by_quality', 'by_layout'):
