@@ -298,4 +298,10 @@ MIGRATIONS = [(2, '''
         BEGIN SELECT RAISE(ABORT,'reclassification reviews are append-only'); END;
     CREATE TRIGGER IF NOT EXISTS reclassification_reviews_no_delete BEFORE DELETE ON reclassification_reviews
         BEGIN SELECT RAISE(ABORT,'reclassification reviews are append-only'); END;
+'''),
+    # Sprint 11: dense page vectors for semantic search (derived data, rebuilt from page_texts).
+    (8, '''
+    CREATE TABLE IF NOT EXISTS page_vectors (
+        document_id TEXT NOT NULL, page_no INTEGER NOT NULL, text_hash TEXT NOT NULL, model TEXT NOT NULL,
+        dim INTEGER NOT NULL, vectors BLOB NOT NULL, PRIMARY KEY(document_id, page_no));
 ''')]

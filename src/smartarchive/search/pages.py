@@ -174,11 +174,14 @@ class PageTexts:
     def search_ranked(self, query: str, limit: int, offset: int, pages_per_document: int = 5,
                       allowed: set[str] | None = None) -> dict:
         """Ranked mode (ranked.py): any word may match, misread words still score; best page ranks the document."""
+        semantic = getattr(self, 'semantic', None)
+        method = ranked.METHOD_DENSE if semantic else ranked.METHOD
         with self.db.connect() as db:
-            words, fused = ranked.search(db, query)
+            dense = semantic.search(db, query) if semantic else None
+            words, fused = ranked.search(db, query, dense)
             if not words:
                 return {'query': query, 'terms': [], 'items': [], 'total': 0, 'limit': limit, 'offset': offset,
-                        'truncated': False, 'mode': 'ranked', 'method': ranked.METHOD}
+                        'truncated': False, 'mode': 'ranked', 'method': method}
             documents = self._documents(db)
             per_document: dict[str, dict] = {}
             for (document_id, page_no), score in fused.items():
@@ -208,7 +211,7 @@ class PageTexts:
                               'filename_match': entry.get('filename_match', False),
                               'matched_pages': len(entry['pages']), 'pages': pages})
         return {'query': query, 'terms': words, 'items': items, 'total': len(order), 'limit': limit, 'offset': offset,
-                'truncated': False, 'mode': 'ranked', 'method': ranked.METHOD}
+                'truncated': False, 'mode': 'ranked', 'method': method}
 
     def search(self, query: str, limit: int, offset: int, pages_per_document: int = 5,
                allowed: set[str] | None = None) -> dict:

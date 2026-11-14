@@ -70,7 +70,7 @@ class Classifications:
 
     def model_info(self) -> dict:
         model = self.model()
-        return {'active_method': learned.METHOD if model else METHOD, 'model': model['card'] if model else None,
+        return {'active_method': model['card'].get('method', learned.METHOD) if model else METHOD, 'model': model['card'] if model else None,
                 'confirmed_examples': _count(self.training_set()[2]), 'min_per_category': learned.MIN_PER_CLASS}
 
     def training_set(self) -> tuple[list[str], list[str], list[str]]:
@@ -279,7 +279,7 @@ class Classifications:
             if model:
                 result = learned.predict(model, text, document['filename'], {c.id: c.group_id for c in categories},
                                          {c.id for c in categories})
-                method = learned.METHOD
+                method = model['card'].get('method', learned.METHOD)
                 basis['model_id'] = model['card'].get('id')
             else:
                 result = classify(text, document['filename'], categories, self.min_score, self.min_confidence)

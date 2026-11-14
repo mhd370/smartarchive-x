@@ -8,6 +8,7 @@ import { useApi } from "@/lib/use-api";
 import { actors, date, number } from "@/lib/format";
 import { Icon } from "@/components/icons";
 import { Failure, Loading } from "@/components/ui";
+import { FolderGraphPanel } from "@/components/folder-graph";
 
 export default function Folders() {
   const { can } = useAuth();
@@ -46,5 +47,6 @@ export default function Folders() {
           <small className="muted">{actors(item.created_by)} · {date(item.created_at)}</small>
         </li>)}</ul>}
     </section>
+    <FolderGraphPanel />
   </>;
 }

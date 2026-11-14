@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.16.0 — Sprint 11 / Task 016 (unreleased)
+- Dense retrieval `dense-e5-small-v1` (ADR 0013): multilingual-e5-small through ONNX Runtime on the CPU, with
+  page vectors in `page_vectors` (migration 8) and a background indexer, fused as a fourth ranking
+  (`hybrid-rrf-v2`). Paraphrased queries gain 6.7 points of Recall@10 on the development set but only 0.5 on
+  the test set, so it ships **off by default** (`SMARTARCHIVE_SEMANTIC=1`, `tools/fetch_semantic_model.py`).
+- Paraphrased evaluation queries (`tools/paraphrase_queries.py`), reported separately. Exact search finds
+  2–3% of paraphrased needs and ranked search about a third.
+- Folder knowledge graph (`GET /api/graph`, `folder-graph-v1`): the folders page maps folders to the categories
+  of their documents (confirmed or suggested) and lists relations that cross folders.
+- Third classification baseline `tfidf-char-lr-v1` (character 2–5-grams, logistic regression): `learned.train
+  (method=...)`, `tools/train_classifier.py --method`. Test set, trained on corpus_v1 layout text: accuracy 79.7%, coverage 83.2%, precision 95.8%, against 81.2% / 82.8% / 98.0% for `tfidf-svm-v1`, which stays the default.
+- Reclassification gates confirmed on the held-out set: 78.5% of wrong confirmations caught, 0.3% false alarms (development set 76.7% / 0.2%).
+- Literature review draft: 43 works in 8 themes, with a comparison table (`docs/literature_review.md`).
+
 ## 0.15.0 — Sprint 10 / Task 015 (unreleased)
 - Layout analysis `layout-v1` (ADR 0012): ruled tables found from their ruling lines and read cell by cell,
   right to left; two-column sections whose lines psm 3 merged are split at the gutter and read right column

@@ -16,6 +16,7 @@ import re
 from .arabic import find_spans, normalize
 
 METHOD = 'hybrid-rrf-v1'
+METHOD_DENSE = 'hybrid-rrf-v2'  # the same fusion plus the dense ranking of semantic.py
 RRF_K = 60
 CANDIDATES = 300
 _PREFIXES = ('وبال', 'وال', 'بال', 'كال', 'فال', 'لل', 'ال', 'و', 'ف', 'ب', 'ك', 'ل')
@@ -74,8 +75,8 @@ def _ranked(db, sql: str, match: str) -> list[tuple[str, int]]:
     return [(row[0], row[1]) for row in db.execute(sql, (match, CANDIDATES))]
 
 
-def search(db, query: str) -> tuple[list[str], dict[tuple[str, int], float]]:
-    """(normalized query words, fused RRF score per (document_id, page_no))."""
+def search(db, query: str, dense: list[tuple[str, int]] | None = None) -> tuple[list[str], dict[tuple[str, int], float]]:
+    """(normalized query words, fused RRF score per (document_id, page_no)); `dense` is semantic.py's ranking."""
     words = [word for word in normalize(query).split()][:12]
     word_match = ' OR '.join(_quote(stem(word)) for word in dict.fromkeys(words))
     grams = list(dict.fromkeys(gram for word in words for gram in trigrams(word)))
@@ -95,7 +96,7 @@ def search(db, query: str) -> tuple[list[str], dict[tuple[str, int], float]]:
         exact = [(row[0], row[1]) for row in sorted(
             rows, key=lambda row: -(row[2].count(' '.join(words)) * 10 + sum(row[2].count(w) for w in words)))]
     fused: dict[tuple[str, int], float] = defaultdict(float)
-    for ranking in (exact, by_words, by_grams):
+    for ranking in (exact, by_words, by_grams, dense or []):
         for rank, key in enumerate(ranking):
             fused[key] += 1.0 / (RRF_K + rank + 1)
     return words, dict(fused)

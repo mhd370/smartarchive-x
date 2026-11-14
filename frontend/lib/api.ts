@@ -97,6 +97,11 @@ export type ClassifierCard = { id: string; method: string; threshold: number; so
   classes: string[]; examples: Record<string, number>; left_out: Record<string, number> };
 export type ClassifierInfo = { active_method: string; model: ClassifierCard | null;
   confirmed_examples: Record<string, number>; min_per_category: number };
+export type FolderGraph = { method: string;
+  folders: { id: string | null; parent_id: string | null; name: string; path: string; documents: number }[];
+  categories: { id: string; name: string; documents: number }[];
+  folder_category: { folder_id: string | null; category_id: string; documents: number; confirmed: number }[];
+  folder_relations: { a: string | null; b: string | null; kind: string; count: number }[] };
 export type SearchResult = { query: string; terms: string[]; items: SearchItem[]; total: number; limit: number;
   offset: number; truncated: boolean; mode: "ranked" | "exact"; method?: string };
 export type Revision = { id: string; version: number; base_source: TextSource; base_run_id: string | null; note: string;

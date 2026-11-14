@@ -45,6 +45,21 @@ class LearnedModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             learned.train(['a', 'b'], ['x', 'y'], ['invoice', 'minutes'], source='test')  # too few examples
 
+    def test_character_baseline(self):
+        texts, labels = [], []
+        for n in range(1, 5):
+            for kind, templates in (('invoice', INVOICES), ('minutes', MINUTES), ('contract', CONTRACTS)):
+                texts += [t.format(n=n) for t in templates]
+                labels += [kind] * len(templates)
+        model = learned.train(texts, ['scan.png'] * len(texts), labels, source='test', method=learned.CHAR_METHOD)
+        self.assertEqual(model['card']['method'], 'tfidf-char-lr-v1')
+        groups = {'invoice': 'financial', 'minutes': 'administrative', 'contract': 'legal'}
+        # A word split by OCR («فات ورة») still shares character n-grams with «فاتورة».
+        result = learned.predict(model, 'فات ورة شركة جديدة الإجمالي ٩٠٠ دينار ضريبة', 'x.png', groups, set(groups))
+        self.assertEqual(result.category_id, 'invoice')
+        with self.assertRaises(ValueError):
+            learned.train(texts, ['x'] * len(texts), labels, source='test', method='nope')
+
 
 class ServiceTrainingTests(unittest.TestCase):
     def setUp(self):

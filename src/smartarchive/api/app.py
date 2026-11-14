@@ -13,6 +13,8 @@ from smartarchive.persistence.database import Database
 from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
 from smartarchive.search.pages import PageTexts
+from smartarchive.search import ranked, semantic
+from smartarchive.services import graph
 from smartarchive.classification.service import Classifications
 from smartarchive.enrichment.duplicates import Relations
 from smartarchive.enrichment.metadata import Metadata
@@ -38,7 +40,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
     classes = Classifications(db, models_dir=settings.storage_dir / 'models')
-    backups = Backups(settings.storage_dir, settings.backup_dir, '0.15.0')
+    backups = Backups(settings.storage_dir, settings.backup_dir, '0.16.0')
     folders = Folders(db)
     metadata = Metadata(db)
     relations = Relations(db, metadata)
@@ -49,9 +51,16 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         metadata.run_quietly(document_id)
         classes.suggest_quietly(document_id, actor if trigger == 'review' else 'system:classifier', trigger)
         relations.detect_quietly(document_id)
+        if indexer:
+            indexer.wake()
 
     ocr.on_ready = after_text_change
     worker = Worker(ocr)
+    encoder = semantic.load(settings.semantic_model_dir)  # optional dense retrieval (ADR 0013)
+    indexer = None
+    if encoder:
+        texts.semantic = semantic.SemanticIndex(encoder)
+        indexer = semantic.Indexer(db, texts.semantic)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -69,10 +78,14 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         relations.ensure_fingerprinted()
         if settings.ocr_worker:
             worker.start()
+        if indexer:
+            indexer.start()
         yield
         worker.stop()
+        if indexer:
+            indexer.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.15.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.16.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations
@@ -158,6 +171,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         info = ocr.info()
         return {'status': 'ok', 'ocr_configured': info['configured'], 'ocr_engine': info['engine'],
                 'ocr_languages': info['languages'],
+                'search_method': ranked.METHOD_DENSE if encoder else ranked.METHOD,
                 'max_upload_bytes': settings.max_upload_bytes,
                 'supported_extensions': ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff']}
 
@@ -282,6 +296,11 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.get('/api/folders')
     def folder_tree(user: Reader):
         return {'items': folders.tree()}
+
+    @api.get('/api/graph')
+    def folder_graph(user: Reader):
+        """Folders, the categories of their documents and cross-folder relations (services/graph.py)."""
+        return graph.build(db)
 
     @api.post('/api/folders', status_code=201)
     def folder_create(body: FolderCreate, user: Uploader):

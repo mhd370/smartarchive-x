@@ -45,6 +45,8 @@ def main(argv=None) -> int:
     parser.add_argument('--corpus', type=Path)
     parser.add_argument('--work', type=Path, help='evaluation work folder of that corpus (its OCR text)')
     parser.add_argument('--out', type=Path, help='model folder to write (corpus mode)')
+    parser.add_argument('--method', default='tfidf-svm-v1', choices=('tfidf-svm-v1', 'tfidf-char-lr-v1'),
+                        help='corpus mode: which learned baseline to train')
     args = parser.parse_args(argv)
     from smartarchive.classification import learned
     if args.archive:
@@ -59,7 +61,8 @@ def main(argv=None) -> int:
         if 'corpus_v2' in str(args.corpus):
             parser.error('corpus_v2 is the held-out test set; train on corpus_v1')
         texts, names, labels = corpus_training_set(args.corpus.resolve(), args.work.resolve())
-        model = learned.train(texts, names, labels, f'synthetic corpus {args.corpus.name} ({len(labels)} documents, OCR text)')
+        model = learned.train(texts, names, labels, f'synthetic corpus {args.corpus.name} ({len(labels)} documents, OCR text)',
+                              method=args.method)
         learned.save(model, args.out.resolve())
         card = model['card']
     else:
