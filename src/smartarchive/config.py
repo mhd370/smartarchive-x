@@ -41,6 +41,9 @@ class Settings:
     ocr_page_timeout_seconds: int = 120
     # Ruled tables cell by cell and two-column reading order (processing/layout.py, ADR 0012).
     layout_analysis: bool = True
+    # Dense retrieval (search/semantic.py, ADR 0013): off unless SMARTARCHIVE_SEMANTIC=1 and the model is present;
+    # it helped paraphrased queries on the development set but not on the held-out test set.
+    semantic_model_dir: Path | None = None
     review_confidence_threshold: float = 0.60
     quality_weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)
 
@@ -70,4 +73,7 @@ class Settings:
                    if os.getenv('SMARTARCHIVE_TESSDATA_DIR') else None,
                    ocr_auto=flag('SMARTARCHIVE_OCR_AUTO', 'true'),
                    layout_analysis=flag('SMARTARCHIVE_LAYOUT', 'true'),
+                   semantic_model_dir=(Path(os.environ['SMARTARCHIVE_SEMANTIC_MODEL']).resolve()
+                                       if os.getenv('SMARTARCHIVE_SEMANTIC_MODEL') else ROOT / 'models' / 'semantic'
+                                       / 'multilingual-e5-small') if flag('SMARTARCHIVE_SEMANTIC', 'false') else None,
                    ocr_worker=flag('SMARTARCHIVE_OCR_WORKER', 'true'))

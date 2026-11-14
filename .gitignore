@@ -44,3 +44,4 @@ node_modules/
 /frontend/next-env.d.ts
 !/frontend/.env.example
 /models/tessdata/
+/models/semantic/

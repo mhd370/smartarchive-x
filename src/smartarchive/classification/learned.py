@@ -21,6 +21,8 @@ from pathlib import Path
 from smartarchive.search.arabic import normalize
 
 METHOD = 'tfidf-svm-v1'
+CHAR_METHOD = 'tfidf-char-lr-v1'  # third baseline: character 2–5-grams, logistic regression (ADR 0010 addendum)
+METHODS = (METHOD, CHAR_METHOD)
 THRESHOLD = 0.4
 MIN_PER_CLASS = 3
 TOP_TERMS = 6
@@ -48,22 +50,31 @@ def _document_text(text: str, filename: str) -> str:
 
 
 def train(texts: list[str], filenames: list[str], labels: list[str], source: str,
-          threshold: float = THRESHOLD) -> dict:
+          threshold: float = THRESHOLD, method: str = METHOD) -> dict:
     """Fit the model. Classes with fewer than MIN_PER_CLASS examples are left out (listed in the card)."""
     from collections import Counter
     from sklearn.calibration import CalibratedClassifierCV
     from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.linear_model import LogisticRegression
     from sklearn.pipeline import make_pipeline
     from sklearn.svm import LinearSVC
+    if method not in METHODS:
+        raise ValueError(f'unknown method {method}')
     counts = Counter(labels)
     kept = {label for label, n in counts.items() if n >= MIN_PER_CLASS}
     rows = [(t, f, y) for t, f, y in zip(texts, filenames, labels) if y in kept]
     if len(kept) < 2:
         raise ValueError('at least two categories with %d confirmed documents each are needed' % MIN_PER_CLASS)
-    pipeline = make_pipeline(TfidfVectorizer(ngram_range=(1, 2), min_df=2, sublinear_tf=True),
-                             CalibratedClassifierCV(LinearSVC(C=1.0), cv=min(3, min(counts[k] for k in kept))))
+    folds = min(3, min(counts[k] for k in kept))
+    if method == CHAR_METHOD:  # robust to OCR-split words; calibrated the same way so explanations work alike
+        pipeline = make_pipeline(TfidfVectorizer(analyzer='char_wb', ngram_range=(2, 5), min_df=2, sublinear_tf=True,
+                                                 max_features=200_000),
+                                 CalibratedClassifierCV(LogisticRegression(C=10, max_iter=2000), cv=folds))
+    else:
+        pipeline = make_pipeline(TfidfVectorizer(ngram_range=(1, 2), min_df=2, sublinear_tf=True),
+                                 CalibratedClassifierCV(LinearSVC(C=1.0), cv=folds))
     pipeline.fit([_document_text(t, f) for t, f, _ in rows], [y for _, _, y in rows])
-    card = {'method': METHOD, 'threshold': threshold, 'source': source,
+    card = {'method': method, 'threshold': threshold, 'source': source,
             'trained_at': datetime.now(timezone.utc).isoformat(timespec='seconds'),
             'classes': sorted(kept), 'examples': {k: counts[k] for k in sorted(kept)},
             'left_out': {k: counts[k] for k in sorted(set(counts) - kept)}}
@@ -74,7 +85,7 @@ def save(model: dict, folder: Path) -> Path:
     import joblib
     folder.mkdir(parents=True, exist_ok=True)
     stamp = model['card']['trained_at'].replace(':', '').replace('-', '')
-    model['card']['id'] = f'{METHOD}-{stamp}'
+    model['card']['id'] = f"{model['card'].get('method', METHOD)}-{stamp}"
     joblib.dump(model['pipeline'], folder / 'classifier.joblib.tmp')
     (folder / 'classifier.joblib.tmp').replace(folder / 'classifier.joblib')
     (folder / 'classifier.json').write_text(json.dumps(model['card'], ensure_ascii=False, indent=1), encoding='utf-8')

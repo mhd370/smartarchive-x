@@ -159,6 +159,10 @@ class Pipeline:
         self.classes.seed()
         self.ocr = OcrService(self.db, self.store, settings, engine_factory, self.texts)
         self.ocr.on_ready = self.enrich
+        from smartarchive.search import semantic
+        encoder = semantic.load(settings.semantic_model_dir)  # optional dense ranking, as the API loads it
+        if encoder:
+            self.texts.semantic = semantic.SemanticIndex(encoder)
 
     def enrich(self, document_id: str):  # the same steps, in the same order, as the API's after_text_change hook
         self.metadata.run_quietly(document_id)
@@ -222,6 +226,9 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
     # As the API does at start-up: archives OCR'd before ranked search existed get their indexes back-filled.
     # Without this, ranked search on such an archive silently fell back to the exact signal alone.
     pipeline.texts.ensure_indexed()
+    if getattr(pipeline.texts, 'semantic', None):
+        with pipeline.db.connect() as db:
+            log(f'Semantic vectors: {pipeline.texts.semantic.refresh(db)} pages embedded.')
     ids = state['ids']
     back = {value: key for key, value in ids.items()}
     if re_enrich:  # new extraction rules or classifier on the stored OCR text, without running OCR again
@@ -311,9 +318,12 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
     from smartarchive.enrichment.duplicates import METHOD as relations_method
     relations = {'method': relations_method, **score_relations(true_pairs(entries), predicted)}
 
-    queries = [q for q in json.loads((corpus / 'queries.json').read_text(encoding='utf-8'))
-               if set(q['relevant']) <= keep]
-    from smartarchive.search.ranked import METHOD as ranked_method
+    queries = json.loads((corpus / 'queries.json').read_text(encoding='utf-8'))
+    if (corpus / 'queries_paraphrase.json').is_file():  # tools/paraphrase_queries.py: same needs, other words
+        queries += json.loads((corpus / 'queries_paraphrase.json').read_text(encoding='utf-8'))
+    queries = [q for q in queries if set(q['relevant']) <= keep]
+    from smartarchive.search import ranked as ranked_module
+    ranked_method = ranked_module.METHOD_DENSE if getattr(pipeline.texts, 'semantic', None) else ranked_module.METHOD
     search = {'queries': len(queries)}
     for mode, run, method in (('ranked', pipeline.texts.search_ranked, ranked_method),
                               ('exact', pipeline.texts.search, 'substring-v1 (all terms, normalized)')):
@@ -323,8 +333,11 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
             ranking = [back.get(item['document']['id']) for item in result['items']]
             scored.append({'id': query['id'], 'kind': query['kind'], **retrieval(ranking, set(query['relevant']))})
         block = {'method': method}
-        for kind in ('all', 'subject', 'reference_number'):
-            items = [s for s in scored if kind == 'all' or s['kind'] == kind]
+        for kind in ('all', 'subject', 'reference_number', 'paraphrase'):
+            # 'all' stays the original queries, so that it compares with earlier runs; paraphrases are separate
+            items = [s for s in scored if (s['kind'] != 'paraphrase' if kind == 'all' else s['kind'] == kind)]
+            if not items:
+                continue
             block[kind] = {'queries': len(items), 'recall@10': mean(s['recall'] for s in items),
                            'mrr@10': mean(s['mrr'] for s in items), 'ndcg@10': mean(s['ndcg'] for s in items)}
         search[mode] = block
@@ -418,7 +431,9 @@ def markdown(report: dict) -> str:
         lines.append(f"| {kind} | {block['true']} | {block['suggested']} | {pct(block['precision'])} | {pct(block['recall'])} |")
     lines += ['', '## Search', '', '| Mode | Queries | n | Recall@10 | MRR@10 | nDCG@10 |', '|---|---|---|---|---|---|']
     for mode in ('ranked', 'exact'):
-        for kind in ('all', 'subject', 'reference_number'):
+        for kind in ('all', 'subject', 'reference_number', 'paraphrase'):
+            if kind not in search[mode]:
+                continue
             block = search[mode][kind]
             lines.append(f"| {mode} ({search[mode]['method']}) | {kind} | {block['queries']} | {pct(block['recall@10'])} | "
                          f"{pct(block['mrr@10'])} | {pct(block['ndcg@10'])} |")

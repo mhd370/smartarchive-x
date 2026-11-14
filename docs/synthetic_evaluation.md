@@ -161,3 +161,44 @@ sleeping during the run.
 Tesseract stays the engine. The other two read born-digital and mildly degraded pages slightly better. With 8
 pages per quality level that is not conclusive, and they are 7–40× slower and much worse on scans.
 
+## Sprint 11: dense retrieval, paraphrased queries, third classification baseline
+
+### Search with paraphrased queries (ADR 0013)
+`tools/paraphrase_queries.py` rewrites every subject query with fixed synonym rules, keeping names: 239
+development queries and 311 test queries. Results are Recall@10 / MRR@10 on layout-analysis OCR text.
+
+| Queries | Dev lexical | Dev + dense | Test lexical | Test + dense |
+|---|---|---|---|---|
+| Original | 60.9% / 37.6% | 61.8% / 37.8% | 54.9% / 32.5% | 54.5% / 30.1% |
+| Paraphrased | 34.1% / 14.5% | 40.8% / 19.0% | 33.4% / 14.9% | 33.9% / 14.7% |
+| Paraphrased, exact mode | 2.1% | — | 3.4% | — |
+
+The development gain from dense retrieval (+6.7) does not carry over to the test set (+0.5). Dense retrieval is
+therefore off by default.
+
+### Three classification baselines (test set corpus_v2, 606 documents)
+The learned models were trained on corpus_v1's layout-analysis OCR text.
+
+| Baseline | Accuracy | Coverage | Precision when answered | Group |
+|---|---|---|---|---|
+| `keywords-v1` | 71.6% | 76.4% | 93.7% | 80.4% |
+| `tfidf-svm-v1` (default) | **81.2%** | 82.8% | **98.0%** | 87.1% |
+| `tfidf-char-lr-v1` | 79.7% | **83.2%** | 95.8% | **87.3%** |
+
+The character model answers slightly more documents but is wrong more often, and on an archive a wrong
+category costs more than an abstention. Development-set cross-validation (OCR text, 5 folds grouped by
+relation cluster) agrees:
+- word SVM: 87.3% accuracy without abstention, 97.6% precision at the 0.4 threshold;
+- character model: 86.3% and 96.2%.
+
+Neither text model helps severe scans, which reach 31–37% in cross-validation because their OCR text is almost
+empty.
+
+### Reclassification gates on held-out data (ADR 0011)
+With `tfidf-svm-v1` on the test set:
+- 78.5% of wrong confirmations caught;
+- 0.3% false alarms on correct confirmations;
+- 0.3% proposals to another wrong type.
+
+These match the development figures used to choose the gates (76.7% / 0.2% / 0.17%).
+

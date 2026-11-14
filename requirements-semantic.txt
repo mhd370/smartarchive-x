@@ -1,0 +1,3 @@
+# Optional: semantic (dense) search, ADR 0013. Without these, ranked search runs without the dense ranking.
+onnxruntime==1.31.1
+tokenizers==0.23.3
