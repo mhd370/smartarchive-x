@@ -1,0 +1,12 @@
+# Render blueprint: the SmartArchive-X API as a Docker web service (free plan, storage is not persistent).
+services:
+  - type: web
+    name: smartarchive-x-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: SMARTARCHIVE_CORS_ORIGINS
+        value: https://smartarchive-x-kareem.netlify.app

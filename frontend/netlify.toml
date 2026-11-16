@@ -1,0 +1,8 @@
+# Netlify: the Next.js interface. /api/* is forwarded server-side to the API on Render
+# (SMARTARCHIVE_API_ORIGIN at build time, see next.config.ts), so the browser stays on one origin.
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "24"

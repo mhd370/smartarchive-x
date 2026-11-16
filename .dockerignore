@@ -1,0 +1,12 @@
+.git
+.venv
+.venv-ocr
+.tools
+frontend
+results
+storage
+data
+models
+docs
+tests
+**/__pycache__
