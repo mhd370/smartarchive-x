@@ -1,9 +1,8 @@
 # Literature review (working draft)
 
-Status: draft for the thesis and paper, Sprint 11. 42 works in 8 themes, each with what it contributes and
-where SmartArchive-X stands relative to it. Entries marked **[verify]** still need the full text read and the
-bibliographic details checked against the publisher before they are cited. The others were checked against
-the publisher or an index (DBLP, ACL Anthology, arXiv).
+Status: draft for the thesis and paper, Sprint 12. 51 works in 8 themes, each with what it contributes and
+where SmartArchive-X stands relative to it. Every entry was checked against the publisher or an index (DBLP, ACL Anthology, arXiv, Springer).
+The paper draft cites them with these numbers.
 
 ## 1. Arabic OCR
 
@@ -53,8 +52,8 @@ the publisher or an index (DBLP, ACL Anthology, arXiv).
 12. **P. McNamee, J. Mayfield (2004). Character n-gram tokenization for European language text retrieval.**
     Information Retrieval 7(1–2):73–97. Overlapping character n-grams match or beat stemming, without any
     language resources, and are robust to spelling variation.
-    - *Relation:* the basis of our trigram index, which is the component that lifts reference-number recall
-      from 7–9% to 30–35% on OCR text.
+    - *Relation:* the basis of our trigram index. Our ablation (Sprint 12) found that on these corpora it does
+      not add to the word index, so it is now opt-in.
 
 ## 3. Arabic text processing for retrieval
 
@@ -166,9 +165,12 @@ the publisher or an index (DBLP, ACL Anthology, arXiv).
       MinHash route would scale it.
 - **ISO 15489-1:2016. Information and documentation — Records management.** The principles our design
   follows: an immutable original, metadata, an audit trail, controlled classification and access.
-- **Archival practice with machine learning (grey literature).** Pilots by NSW State Archives (2017–2018)
-  and the National Archives of Australia classify records automatically with a human in the loop, which is
-  the same pattern as our suggest–confirm design. **[verify: cite the published reports]**
+- **[50] State Archives and Records Authority of New South Wales (2018). Case study – internal pilot –
+  machine learning and records management** (Future Proof blog, 20 March 2018) and the **external pilot**
+  case study (24 September 2018). Machine-learning pilots for classifying government records, with
+  records staff checking the results.
+  - *Relation:* the same suggest–confirm pattern as our design; these pilots publish no open evaluation.
+- **[51]** ISO 15489-1:2016 above.
 
 ## Comparison with SmartArchive-X
 
@@ -190,12 +192,34 @@ the publisher or an index (DBLP, ACL Anthology, arXiv).
 None combines the whole archive workflow for Arabic administrative documents, with each stage measured on the
 same held-out documents and a person kept in control of every decision.
 
+## 9. Arabic OCR correction and retrieval on OCR text (added in Sprint 12)
+44. **W. Magdy, K. Darwish (2006). Arabic OCR error correction using character segment correction, language
+    modeling, and shallow morphology.** EMNLP 2006, pp. 408–414. A noisy-channel model over character
+    segments with a trigram language model; segment-level correction beats single-character correction.
+    - *Relation:* the post-OCR route for our digit and letter confusions.
+45. **W. Magdy, K. Darwish (2008). Effect of OCR error correction on Arabic retrieval.** Information Retrieval
+    11:405–425. Correction helps retrieval only when it removes many errors; short character n-grams are a
+    strong index unit without correction.
+    - *Relation:* motivated our trigram ranking. On our synthetic corpora the word-level BM25 index carried the
+      gain instead (ADR 0014), a difference worth testing on real scans, whose errors differ from ours.
+46. **I. Kissos, N. Dershowitz (2016). OCR error correction using character correction and feature-based word
+    classification.** arXiv:1604.06225. Candidates from a learned confusion matrix, chosen by a regression
+    over language-model and OCR features; word error rate 30% → 21% on printed Arabic archive documents.
+    - *Relation:* the closest setting to ours (printed Arabic institutional pages).
+47. **M. S. Kasem, M. Mahmoud, H.-S. Kang (2023). Advancements and challenges in Arabic optical character
+    recognition: a comprehensive survey.** arXiv:2312.11812.
+    - *Relation:* recent survey of datasets, preprocessing and post-processing for Arabic OCR.
+48. **L. Bonifacio et al. (2021). mMARCO: a multilingual version of the MS MARCO passage ranking dataset.**
+    arXiv:2108.13897. MS MARCO machine-translated into more than ten languages, Arabic among them.
+    - *Relation:* the training data of our cross-encoder re-ranker.
+49. **W. Wang et al. (2021). MiniLMv2: multi-head self-attention relation distillation for compressing
+    pretrained transformers.** Findings of ACL 2021.
+    - *Relation:* the multilingual MiniLM architecture of the re-ranker (12 layers, hidden size 384).
+
 ## Evaluation methodology
 43. **K. Järvelin, J. Kekäläinen (2002). Cumulated gain-based evaluation of IR techniques.** ACM TOIS 20(4),
     doi:10.1145/582415.582418.
     - *Relation:* our nDCG@10.
 
 ## Still to do
-- Read and check the remaining **[verify]** entry (the archival machine-learning pilots).
-- Add 5–8 works on Arabic post-OCR correction and on digit recognition.
-- Turn the table into the paper's related-work section, about one page.
+- The related-work section of the paper draft uses this list; keep the numbers in step when adding works.

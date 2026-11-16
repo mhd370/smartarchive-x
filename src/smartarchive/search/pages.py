@@ -13,7 +13,7 @@ import uuid
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
 from .arabic import find_spans, normalize, parse_query, snippets
-from . import ranked
+from . import ranked, rerank
 
 MAX_TEXT = 100_000
 MAX_NOTE = 500
@@ -175,10 +175,16 @@ class PageTexts:
                       allowed: set[str] | None = None) -> dict:
         """Ranked mode (ranked.py): any word may match, misread words still score; best page ranks the document."""
         semantic = getattr(self, 'semantic', None)
-        method = ranked.METHOD_DENSE if semantic else ranked.METHOD
+        components = getattr(self, 'components', ranked.DEFAULT_COMPONENTS)
+        method = ranked.method_name(components, bool(semantic))
+        alpha = getattr(self, 'confidence_alpha', 0.0)  # confidence-aware fusion (ADR 0014), off by default
+        reranker = getattr(self, 'reranker', None)  # optional cross-encoder (rerank.py), off by default
+        if alpha:
+            method += f'+conf{alpha:g}'
         with self.db.connect() as db:
             dense = semantic.search(db, query) if semantic else None
-            words, fused = ranked.search(db, query, dense)
+            words, fused = ranked.search(db, query, dense, components,
+                                         ranked.page_confidence(db) if alpha else None, alpha)
             if not words:
                 return {'query': query, 'terms': [], 'items': [], 'total': 0, 'limit': limit, 'offset': offset,
                         'truncated': False, 'mode': 'ranked', 'method': method}
@@ -196,6 +202,17 @@ class PageTexts:
                     entry['score'] += 1.0 / (ranked.RRF_K + 1)
                     entry['filename_match'] = True
             order = sorted(per_document.items(), key=lambda item: (-item[1]['score'], documents[item[0]]['created_at']))
+            if reranker and order and offset < rerank.DEPTH:
+                head, passages = order[:rerank.DEPTH], []
+                for document_id, entry in head:
+                    if not entry['pages']:  # found by its file name only
+                        passages.append(normalize(documents[document_id]['filename']))
+                        continue
+                    row = db.execute('SELECT text FROM page_texts WHERE document_id=? AND page_no=?',
+                                     (document_id, max(entry['pages'])[1])).fetchone()
+                    passages.append(rerank.passage(row['text'], ranked.page_hits(row['text'], words)))
+                order = rerank.reorder(head, reranker.score(query, passages), reranker.mode) + order[rerank.DEPTH:]
+                method += '+' + rerank.METHOD
             items = []
             for document_id, entry in order[offset:offset + limit]:
                 pages = []

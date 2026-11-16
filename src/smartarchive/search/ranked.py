@@ -1,4 +1,8 @@
-"""Ranked search (`hybrid-rrf-v1`): exact matches, BM25 over light Arabic stems and character-trigram BM25.
+"""Ranked search: exact matches, BM25 over light Arabic stems and, optionally, character-trigram BM25.
+
+Default since Sprint 12 (`hybrid-rrf-v3`): exact + BM25 stems. The ablation in ADR 0014 showed that adding the
+trigram ranking lowers Recall@10 and MRR on both corpora, reference numbers included, so it is opt-in
+(SMARTARCHIVE_SEARCH_COMPONENTS=exact,words,grams gives the earlier `hybrid-rrf-v1`).
 
 Why two indexes:
 - Words: the normalized page text with light stemming. Prefixes و ف ب ك ل ال and common suffixes are
@@ -9,14 +13,22 @@ Why two indexes:
 - Exact: pages that contain every query word (as the exact mode), the whole phrase first.
 The three rankings are fused with reciprocal rank fusion (RRF, k=60) per page. A document scores as its best
 page. The substring search in pages.py stays available as the exact mode.
+
+Options used by the ablation and the confidence-aware variant (tools/search_experiments.py, ADR 0014):
+- `components` limits the fusion to a subset of the rankings ('exact', 'words', 'grams', 'dense');
+- `confidence` maps (document_id, page_no) to the page's mean OCR confidence (0–1). With `alpha` > 0 a page
+  read with low confidence gets more weight on the error-tolerant trigram ranking and less on the exact one:
+  exact × (1 − alpha·(1 − c)), trigrams × (1 + alpha·(1 − c)). A badly read page rarely holds the exact words,
+  but its misread words still share trigrams with the query.
 """
 from collections import defaultdict
 import re
 
 from .arabic import find_spans, normalize
 
-METHOD = 'hybrid-rrf-v1'
-METHOD_DENSE = 'hybrid-rrf-v2'  # the same fusion plus the dense ranking of semantic.py
+METHOD = 'hybrid-rrf-v3'  # exact + BM25 stems (ADR 0014)
+METHOD_DENSE = 'hybrid-rrf-v3+dense'  # the same fusion plus the dense ranking of semantic.py
+METHOD_TRIGRAMS = 'hybrid-rrf-v1'  # exact + BM25 stems + trigrams, the Sprint 7–11 default
 RRF_K = 60
 CANDIDATES = 300
 _PREFIXES = ('وبال', 'وال', 'بال', 'كال', 'فال', 'لل', 'ال', 'و', 'ف', 'ب', 'ك', 'ل')
@@ -75,7 +87,29 @@ def _ranked(db, sql: str, match: str) -> list[tuple[str, int]]:
     return [(row[0], row[1]) for row in db.execute(sql, (match, CANDIDATES))]
 
 
-def search(db, query: str, dense: list[tuple[str, int]] | None = None) -> tuple[list[str], dict[tuple[str, int], float]]:
+COMPONENTS = ('exact', 'words', 'grams', 'dense')  # everything that can be fused
+DEFAULT_COMPONENTS = ('exact', 'words', 'dense')  # dense only contributes when its model is loaded
+
+
+def method_name(components, dense: bool) -> str:
+    base = METHOD_TRIGRAMS if 'grams' in components else METHOD
+    return base + ('+dense' if dense and 'dense' in components else '')
+
+
+def page_confidence(db) -> dict[tuple[str, int], float]:
+    """Mean OCR word confidence (0–1) of each page's current OCR text; reviewed pages count as fully confident."""
+    out = {}
+    for row in db.execute('SELECT t.document_id, t.page_no, t.source, a.mean_confidence FROM page_texts t LEFT JOIN'
+                          ' page_analyses a ON a.run_id=t.run_id AND a.page_no=t.page_no'):
+        value = 1.0 if row[2] != 'ocr' else row[3]
+        if value is not None:
+            out[(row[0], row[1])] = max(0.0, min(1.0, value / 100.0 if value > 1 else value))
+    return out
+
+
+def search(db, query: str, dense: list[tuple[str, int]] | None = None, components=DEFAULT_COMPONENTS,
+           confidence: dict[tuple[str, int], float] | None = None,
+           alpha: float = 0.0) -> tuple[list[str], dict[tuple[str, int], float]]:
     """(normalized query words, fused RRF score per (document_id, page_no)); `dense` is semantic.py's ranking."""
     words = [word for word in normalize(query).split()][:12]
     word_match = ' OR '.join(_quote(stem(word)) for word in dict.fromkeys(words))
@@ -96,9 +130,14 @@ def search(db, query: str, dense: list[tuple[str, int]] | None = None) -> tuple[
         exact = [(row[0], row[1]) for row in sorted(
             rows, key=lambda row: -(row[2].count(' '.join(words)) * 10 + sum(row[2].count(w) for w in words)))]
     fused: dict[tuple[str, int], float] = defaultdict(float)
-    for ranking in (exact, by_words, by_grams, dense or []):
-        for rank, key in enumerate(ranking):
-            fused[key] += 1.0 / (RRF_K + rank + 1)
+    rankings = {'exact': exact, 'words': by_words, 'grams': by_grams, 'dense': dense or []}
+    for name in components:
+        for rank, key in enumerate(rankings[name]):
+            weight = 1.0
+            if alpha and confidence is not None and name in ('exact', 'grams'):
+                doubt = 1.0 - confidence.get(key, 1.0)
+                weight = 1.0 - alpha * doubt if name == 'exact' else 1.0 + alpha * doubt
+            fused[key] += weight / (RRF_K + rank + 1)
     return words, dict(fused)
 
 

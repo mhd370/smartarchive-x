@@ -167,3 +167,7 @@
 .error-text{display:block;color:#b3605a;font-size:10px}
 .ocr-box.evidence{background:#f2c94c40;border-color:#c99a1a;border-width:2.5px;box-shadow:0 0 0 2px #f2c94c66}.evidence-tag{font-size:12px;background:#fdf3d4;color:#6d5a2a;border:1px solid #ecd9a8;border-radius:999px;padding:3px 10px}
 .graph-scroll{overflow-x:auto}.folder-graph{width:100%;min-width:560px;height:auto;font-size:12px}.graph-link{fill:none;stroke:#08786d;opacity:.55;transition:opacity .15s}.graph-link.suggested{stroke-dasharray:5 4;stroke:#8a8f98}.graph-link.dim{opacity:.08}.graph-node rect{fill:var(--surface,#fff);stroke:#c9ced6}.graph-node.folder rect{fill:#eef7f5;stroke:#08786d}.graph-node.category rect{fill:#f6f3ea;stroke:#c99a1a}.graph-node text{fill:currentColor}.graph-subtitle{font-size:14px;margin:12px 0 6px}.graph-relations{margin:0 0 6px;padding-inline-start:18px;font-size:13px}
+
+.folder-suggestion { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.folder-chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border: 1px dashed var(--line, #c9c9c9);
+  border-radius: 999px; font-size: 0.85rem; }

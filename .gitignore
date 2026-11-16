@@ -45,3 +45,4 @@ node_modules/
 !/frontend/.env.example
 /models/tessdata/
 /models/semantic/
+/models/reranker/

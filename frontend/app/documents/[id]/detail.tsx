@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { apiUrl, patch, post, type AuditEvent, type DocumentRecord, type Folder, type OcrLine, type OcrPage, type OcrSummary,
+import { apiUrl, patch, post, type AuditEvent, type DocumentRecord, type Folder, type FolderSuggestions, type OcrLine, type OcrPage, type OcrSummary,
   type PageAnalysis, type Processing } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useApi } from "@/lib/use-api";
@@ -52,9 +52,10 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
   const [textVersion, setTextVersion] = useState(0);  // a page correction can change the suggested category
   const folders = useApi<{ items: Folder[] }>(can("documents.upload") ? "/folders" : null);
   const [moving, setMoving] = useState(false), [moveError, setMoveError] = useState("");
+  const suggestions = useApi<FolderSuggestions>(`/documents/${id}/folder-suggestions?v=${textVersion}`);
   async function move(folderId: string) {
     setMoving(true); setMoveError("");
-    try { await patch(`/documents/${id}/folder`, { folder_id: folderId || null }); resource.reload(); audit.reload(); }
+    try { await patch(`/documents/${id}/folder`, { folder_id: folderId || null }); resource.reload(); audit.reload(); suggestions.reload(); }
     catch (failure) { setMoveError(failure instanceof Error ? failure.message : "تعذر نقل المستند."); }
     finally { setMoving(false); }
   }
@@ -197,7 +198,16 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
             <div><dt>الحالة</dt><dd><StatusBadge status={status ?? doc.status} /></dd></div>
             <div><dt>المجلد</dt><dd>{can("documents.upload") && folders.data ? <select aria-label="مجلد المستند" className="inline-select" value={doc.folder_id ?? ""} disabled={moving} onChange={e => move(e.target.value)}>
               <option value="">بدون مجلد</option>{folders.data.items.map(item => <option key={item.id} value={item.id}>{item.path}</option>)}</select>
-              : <span dir="auto">{doc.folder_path ?? "—"}</span>}{moveError && <small className="error-text">{moveError}</small>}</dd></div>
+              : <span dir="auto">{doc.folder_path ?? "—"}</span>}{moveError && <small className="error-text">{moveError}</small>}
+              {suggestions.data && suggestions.data.items.length > 0 && suggestions.data.items[0].folder_id !== doc.folder_id &&
+                <div className="folder-suggestion" title="مجلدات المستندات الأشبه بهذا المستند (folder-knn-v1)">
+                  <small>مقترح حسب المستندات المشابهة:</small>
+                  {suggestions.data.items.filter(item => item.folder_id !== doc.folder_id).map(item =>
+                    <span key={item.folder_id} className="folder-chip">
+                      <span dir="auto">{item.path}</span> <small>{percent(item.score)} · {number(item.evidence.length)} مستند</small>
+                      {can("documents.upload") && <button type="button" className="text-link" disabled={moving} onClick={() => move(item.folder_id)}>نقل إليه</button>}
+                    </span>)}
+                </div>}</dd></div>
             <div><dt>نوع الملف</dt><dd dir="ltr">{doc.mime_type}</dd></div>
             <div><dt>حجم الأصل</dt><dd>{bytes(doc.size_bytes)}</dd></div>
             <div><dt>عدد الصفحات</dt><dd>{number(doc.page_count)}</dd></div>

@@ -97,6 +97,8 @@ export type ClassifierCard = { id: string; method: string; threshold: number; so
   classes: string[]; examples: Record<string, number>; left_out: Record<string, number> };
 export type ClassifierInfo = { active_method: string; model: ClassifierCard | null;
   confirmed_examples: Record<string, number>; min_per_category: number };
+export type FolderSuggestions = { method: string; document_id: string; current_folder_id: string | null; reason?: string;
+  items: { folder_id: string; path: string; score: number; evidence: { document_id: string; filename: string | null; similarity: number }[] }[] };
 export type FolderGraph = { method: string;
   folders: { id: string | null; parent_id: string | null; name: string; path: string; documents: number }[];
   categories: { id: string; name: string; documents: number }[];

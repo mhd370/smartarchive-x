@@ -156,6 +156,15 @@ Report every number from it as synthetic.
 .\.venv\Scripts\python.exe tools/evaluate_synthetic.py data\synthetic\corpus_v1 --re-enrich   # new rules, stored OCR text
 ```
 
+Sprint 12 experiments run on the stored OCR text of those evaluation archives, without new OCR:
+
+```powershell
+.\.venv\Scripts\python.exe tools/classification_experiments.py --dev data\synthetic\corpus_v1 --dev-work results\synthetic_eval\corpus_v1_layout --test data\synthetic\corpus_v2 --test-work results\synthetic_eval\corpus_v2_layout
+.\.venv\Scripts\python.exe tools/fetch_reranker_model.py     # optional cross-encoder (ADR 0014)
+.\.venv\Scripts\python.exe tools/search_experiments.py data\synthetic\corpus_v1 --work results\synthetic_eval\corpus_v1_layout
+.\.venv\Scripts\python.exe tools/search_experiments.py data\synthetic\corpus_v2 --work results\synthetic_eval\corpus_v2_layout --choose-from results\synthetic_eval\corpus_v1_layout\search_experiments.json
+```
+
 The evaluation never touches the real archive: it builds a throw-away one under `results\synthetic_eval\`
 and writes `report.json` and `report.md` there. Rules are changed only after looking at `corpus_v1`; `corpus_v2`
 is used once, to report.

@@ -113,6 +113,7 @@ Root `.env.example` documents backend variables; they are read from the environm
 | POST `/api/admin/integrity` *(009)* | Admin: reconcile originals with the database; report only |
 | GET `/api/evaluation` *(009)* | Reviewer/archivist/admin: OCR post-editing CER/WER and classification accuracy from reviewed data |
 | GET/POST `/api/folders` *(010)* | Folder tree with counts / create (`name`, `parent_id`; archivist, admin) |
+| GET `/api/documents/{uuid}/folder-suggestions` *(017)* | Reader: up to three folders where the 5 most similar filed documents are kept (TF-IDF cosine, `folder-knn-v1`), each with its share and the supporting documents; shown under the folder on the document page with a one-click move for archivists ([ADR 0015](adr/0015-multimodal-classification-and-folder-suggestion.md)) |
 | PATCH `/api/documents/{uuid}/folder` *(010)* | Move a document (`folder_id` or null); POST `/api/documents` accepts form field `folder_id`; `/api/documents?folder=` includes sub-folders |
 | GET `/api/documents/{uuid}/metadata`, PUT `.../metadata/{field}` *(010)* | Extracted/corrected number, date, sender, recipient, subject, amount; reviewers edit |
 | GET `/api/documents/{uuid}/relations`, POST `/api/relations/{id}/review` *(010)* | Duplicate/version links; reviewers confirm or reject |
