@@ -283,3 +283,28 @@ Findings:
   plain fusion there and on the test set. It stays off (`SMARTARCHIVE_CONFIDENCE_ALPHA=0`), a measured negative
   result. A likely reason is that page-level confidence is too coarse: a page with a low mean confidence can
   still hold the query's words intact.
+
+### Cross-encoder re-ranking (ADR 0014)
+`ce-mminilm-v1` re-orders the top 20 documents of the three-way fusion (`exact + stems + trigrams`), fused with
+the hybrid rank by RRF. Recall@10 / MRR@10.
+
+| | Original queries | Reference numbers | Paraphrased | s/query |
+|---|---|---|---|---|
+| Dev: three-way fusion | 60.9% / 37.6% | 37.2% / 26.8% | 34.1% / 14.5% | 0.03 |
+| Dev: + cross-encoder | **64.2% / 38.8%** | — | **48.3%** / — | 2.5 |
+| Test: three-way fusion | 54.9% / 32.5% | 29.8% / 22.7% | 33.4% / 14.9% | 0.08 |
+| Test: + cross-encoder | 55.4% / **34.0%** | 32.4% / 26.3% | **43.4% / 20.9%** | 3.1 |
+| Test: exact + stems (default, no re-ranking) | **58.1%** / 33.0% | **40.8%** / 26.7% | 33.4% / 15.1% | 0.08 |
+
+The development log printed only the summary line for the re-ranked run, so its per-kind cells are left
+empty. The `replace` mode was not measured: the laptop went to sleep during that run, and the test set was run
+in `fuse` mode only.
+
+Findings:
+- **The re-ranker generalizes.** Unlike dense retrieval, it keeps most of its development gain on paraphrased
+  queries: +10.0 points of Recall@10 and +6.0 of MRR on the test set, against +14.2 on the development set. It
+  also raises MRR on the original queries (32.5% → 34.0%).
+- **Cost.** About 3 seconds per query on the laptop CPU, and a 118 MB model.
+- **Setting.** It stays an option (`SMARTARCHIVE_RERANK=1`), recommended where people search in their own words.
+  It was measured on the old three-way fusion. Re-ranking on top of the new default (exact + stems) is the next
+  measurement.

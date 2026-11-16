@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.17.1 — documentation
+- Cross-encoder results on the held-out test set: paraphrased queries 33.4% → 43.4% Recall@10, 14.9% → 20.9%
+  MRR, original-query MRR 32.5% → 34.0%, at about 3 s per query; it stays optional (ADR 0014).
+
 ## 0.17.0 — Sprint 12 / Task 017 (unreleased)
 - Search ablation and two optional search extensions (ADR 0014), measured with `tools/search_experiments.py`
   on the stored OCR text of both corpora:
