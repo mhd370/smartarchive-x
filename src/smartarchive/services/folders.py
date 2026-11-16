@@ -109,3 +109,57 @@ class Folders:
             row = db.execute('SELECT f.* FROM document_folders d JOIN folders f ON f.id=d.folder_id'
                              ' WHERE d.document_id=?', (document_id,)).fetchone()
         return dict(row) if row else None
+
+
+SUGGEST_METHOD = 'folder-knn-v1'
+SUGGEST_NEIGHBOURS = 5
+
+
+def suggest_folders(db_handle, document_id: str, k: int = SUGGEST_NEIGHBOURS) -> dict:
+    """Folders where the k filed documents most similar to this one (TF-IDF cosine over their text) are kept.
+
+    Folder placement is archival evidence: a document usually belongs where similar documents already are. Each
+    folder scores the summed similarity of its neighbours; the neighbours are returned as the evidence. It only
+    suggests: filing stays a person's action. Measured by tools/classification_experiments.py (ADR 0015).
+    """
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from smartarchive.search.arabic import normalize
+    with db_handle.connect() as db:
+        if not db.execute('SELECT 1 FROM documents WHERE id=?', (document_id,)).fetchone():
+            raise ArchiveError('not_found', 'المستند غير موجود.', 404)
+        texts: dict[str, list[str]] = {}
+        for row in db.execute('SELECT document_id, text FROM page_texts ORDER BY document_id, page_no'):
+            texts.setdefault(row[0], []).append(row[1])
+        placed = {row[0]: (row[1], row[2]) for row in db.execute(
+            'SELECT d.document_id, f.id, f.path FROM document_folders d JOIN folders f ON f.id=d.folder_id')}
+        names = {row[0]: row[1] for row in db.execute('SELECT id, filename FROM documents')}
+    own = normalize(' '.join(texts.get(document_id, [])))
+    result = {'method': SUGGEST_METHOD, 'document_id': document_id, 'current_folder_id': placed.get(document_id, (None,))[0],
+              'items': []}
+    others = [d for d in placed if d != document_id and normalize(' '.join(texts.get(d, []))).strip()]
+    if not own.strip() or not others:
+        result['reason'] = 'no_text' if not own.strip() else 'no_filed_documents'
+        return result
+    corpus = [own] + [normalize(' '.join(texts[d])) for d in others]
+    try:
+        matrix = TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True).fit_transform(corpus)
+    except ValueError:  # nothing but stop-words or empty vocabulary
+        result['reason'] = 'no_text'
+        return result
+    similarity = (matrix[1:] @ matrix[0].T).toarray().ravel()
+    best = sorted(range(len(others)), key=lambda i: -similarity[i])[:k]
+    votes: dict[str, dict] = {}
+    for i in best:
+        if similarity[i] <= 0:
+            continue
+        folder_id, path = placed[others[i]]
+        entry = votes.setdefault(folder_id, {'folder_id': folder_id, 'path': path, 'score': 0.0, 'evidence': []})
+        entry['score'] += float(similarity[i])
+        entry['evidence'].append({'document_id': others[i], 'filename': names.get(others[i]),
+                                  'similarity': round(float(similarity[i]), 3)})
+    total = sum(v['score'] for v in votes.values()) or 1.0
+    result['items'] = [{**v, 'score': round(v['score'] / total, 3)}
+                       for v in sorted(votes.values(), key=lambda v: -v['score'])[:3]]
+    if not result['items']:
+        result['reason'] = 'no_similar_documents'
+    return result

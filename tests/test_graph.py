@@ -10,7 +10,7 @@ from smartarchive.classification.service import Classifications  # noqa: E402
 from smartarchive.persistence.database import Database, now  # noqa: E402
 from smartarchive.search.pages import PageTexts  # noqa: E402
 from smartarchive.services import graph  # noqa: E402
-from smartarchive.services.folders import Folders  # noqa: E402
+from smartarchive.services.folders import Folders, suggest_folders  # noqa: E402
 
 
 class GraphTests(unittest.TestCase):
@@ -57,6 +57,21 @@ class GraphTests(unittest.TestCase):
         self.assertEqual(unfiled['documents'], 1)
         self.assertEqual(result['categories'][0], {'id': 'invoice', 'name': result['categories'][0]['name'], 'documents': 4})
         self.assertIsNotNone(loose)
+
+    def test_folder_suggestion_follows_similar_filed_documents(self):
+        finance = self.folders.create('المالية', None, 'admin')['id']
+        people = self.folders.create('الموارد البشرية', None, 'admin')['id']
+        for _ in range(3):
+            self.folders.file(self.document('فاتورة رقم ١ الإجمالي ٥٠٠ دينار ضريبة المبيعات'), finance, 'admin')
+            self.folders.file(self.document('طلب إجازة سنوية للموظف اسم الموظف القسم التوقيع'), people, 'admin')
+        new = self.document('فاتورة جديدة الإجمالي ٧٠٠ دينار ضريبة')
+        result = suggest_folders(self.db, new)
+        self.assertEqual(result['method'], 'folder-knn-v1')
+        self.assertEqual(result['items'][0]['folder_id'], finance)
+        self.assertEqual(len(result['items'][0]['evidence']), 3)
+        self.assertIsNone(result['current_folder_id'])
+        empty = self.document('')
+        self.assertEqual(suggest_folders(self.db, empty)['reason'], 'no_text')
 
 
 if __name__ == '__main__':

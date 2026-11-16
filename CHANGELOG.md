@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.17.0 — Sprint 12 / Task 017 (unreleased)
+- Search ablation and two optional search extensions (ADR 0014), measured with `tools/search_experiments.py`
+  on the stored OCR text of both corpora:
+  - `ranked.search(components=...)` restricts the fusion to any subset of exact, BM25 stems and trigrams;
+  - confidence-aware fusion: pages read with low OCR confidence weigh the trigram ranking more and the exact
+    ranking less (`SMARTARCHIVE_CONFIDENCE_ALPHA`);
+  - cross-encoder re-ranking of the top 20 (`search/rerank.py`, `ce-mminilm-v1`, multilingual MiniLM trained
+    on mMARCO, ONNX on the CPU; `tools/fetch_reranker_model.py`, `SMARTARCHIVE_RERANK=1`).
+- Multimodal classification experiment (ADR 0015): `visual-layout-v1` page-image layout features, late and
+  gated fusion with `tfidf-svm-v1`, β chosen by cross-validation on the development set
+  (`tools/classification_experiments.py`). The same tool reports all three text baselines with macro-F1.
+- Macro-F1 and per-type precision/recall/F1 in `tools/evaluate_synthetic.py`.
+- Folder suggestion `folder-knn-v1`: `GET /api/documents/{id}/folder-suggestions`; the document page shows the
+  folders of the most similar filed documents with a one-click move.
+- Literature review: 51 works, every entry checked; Arabic OCR correction and retrieval on OCR text added.
+
 ## 0.16.0 — Sprint 11 / Task 016 (unreleased)
 - Dense retrieval `dense-e5-small-v1` (ADR 0013): multilingual-e5-small through ONNX Runtime on the CPU, with
   page vectors in `page_vectors` (migration 8) and a background indexer, fused as a fourth ranking

@@ -53,6 +53,7 @@ class RankedSearchTests(unittest.TestCase):
         self.assertEqual(self.texts.search('مشاريع صيانة المباني', 10, 0)['total'], 0)
 
     def test_tolerates_an_ocr_misread_word(self):
+        self.texts.components = ('exact', 'words', 'grams')  # trigrams are opt-in since Sprint 12 (ADR 0014)
         result = self.texts.search_ranked('النخيل للمقاولات', 10, 0)
         self.assertEqual(result['items'][0]['document']['id'], self.ids['invoice.png'])
         misread = self.texts.search_ranked('النخيڶ للمقاولاث', 10, 0)  # two misread letters

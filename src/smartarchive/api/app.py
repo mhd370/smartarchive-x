@@ -13,7 +13,7 @@ from smartarchive.persistence.database import Database
 from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
 from smartarchive.search.pages import PageTexts
-from smartarchive.search import ranked, semantic
+from smartarchive.search import ranked, rerank, semantic
 from smartarchive.services import graph
 from smartarchive.classification.service import Classifications
 from smartarchive.enrichment.duplicates import Relations
@@ -22,7 +22,7 @@ from smartarchive.operations import evaluation
 from smartarchive.operations.backup import Backups, integrity
 from smartarchive.services.auth import Accounts, can
 from smartarchive.services.documents import Documents, public_record
-from smartarchive.services.folders import Folders
+from smartarchive.services.folders import Folders, suggest_folders
 from .middleware import UploadLimitMiddleware
 from .schemas import (CategoryCreate, CategoryUpdate, ClassificationDecision, Credentials, Document, DocumentList,
                       FolderAssign, FolderCreate, MetadataEdit, PageRevision, ReclassificationDismissal,
@@ -61,6 +61,9 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     if encoder:
         texts.semantic = semantic.SemanticIndex(encoder)
         indexer = semantic.Indexer(db, texts.semantic)
+    texts.reranker = rerank.load(settings.reranker_model_dir, settings.rerank_mode)  # optional (ADR 0014)
+    texts.confidence_alpha = settings.confidence_alpha
+    texts.components = settings.search_components
 
     @asynccontextmanager
     async def lifespan(app):
@@ -171,7 +174,9 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         info = ocr.info()
         return {'status': 'ok', 'ocr_configured': info['configured'], 'ocr_engine': info['engine'],
                 'ocr_languages': info['languages'],
-                'search_method': ranked.METHOD_DENSE if encoder else ranked.METHOD,
+                'search_method': ranked.method_name(settings.search_components, bool(encoder))
+                + (f'+conf{settings.confidence_alpha:g}' if settings.confidence_alpha else '')
+                + (f'+{rerank.METHOD}' if texts.reranker else ''),
                 'max_upload_bytes': settings.max_upload_bytes,
                 'supported_extensions': ['pdf', 'png', 'jpg', 'jpeg', 'webp', 'tif', 'tiff']}
 
@@ -305,6 +310,11 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     @api.post('/api/folders', status_code=201)
     def folder_create(body: FolderCreate, user: Uploader):
         return folders.create(body.name, body.parent_id, user['username'])
+
+    @api.get('/api/documents/{document_id}/folder-suggestions')
+    def document_folder_suggestions(document_id: UUID, user: Reader):
+        """Folders where the most similar filed documents are kept (folder-knn-v1, ADR 0015)."""
+        return suggest_folders(db, str(document_id))
 
     @api.patch('/api/documents/{document_id}/folder')
     def document_folder(document_id: UUID, body: FolderAssign, user: Uploader):

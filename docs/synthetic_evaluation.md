@@ -101,9 +101,11 @@ the exact signal alone. The evaluator now back-fills before scoring. The correct
 | Development corpus_v1 (321 queries) | 51.2% / 31.0% / 34.7% | **60.1% / 37.1% / 41.9%** | 6.7% → **35.4%** |
 | Test corpus_v2 (430 queries) | 46.2% / 26.2% / 30.4% | **54.2% / 31.4% / 36.1%** | 8.8% → **29.8%** |
 
-Ranked search adds 8–9 points of Recall@10 on both sets. Most of the gain is on reference numbers: the
-trigram ranking finds a number even when OCR misread one or two of its digits. The Sprint 8 conclusion that
-the gain came only from the noisier `ara+eng` text is withdrawn.
+Ranked search adds 8–9 points of Recall@10 on both sets. Most of the gain is on reference numbers. The Sprint 8
+conclusion that the gain came only from the noisier `ara+eng` text is withdrawn. **Correction (Sprint 12):** this
+paragraph first credited the trigram ranking for the reference-number gain. The component ablation of Sprint 12
+shows that the gain comes from BM25 over the word index, which lets any part of the number match; adding the
+trigram ranking lowers reference-number recall.
 
 ## Sprint 8: learned classifier (`tfidf-svm-v1`, ADR 0010)
 
@@ -202,3 +204,82 @@ With `tfidf-svm-v1` on the test set:
 
 These match the development figures used to choose the gates (76.7% / 0.2% / 0.17%).
 
+
+## Sprint 12: macro-F1, multimodal classification, folder suggestion, search ablation and re-ranking
+
+### Classification with macro-F1 and the page image (ADR 0015)
+`tools/classification_experiments.py`, test set corpus_v2 (606 documents). Every model was trained on corpus_v1
+layout-analysis OCR text and its page images. The fusion weight β was chosen by 5-fold cross-validation on
+corpus_v1.
+
+| Model | Accuracy | Coverage | Precision when answered | Macro-F1 | Medium scans | Severe scans |
+|---|---|---|---|---|---|---|
+| `keywords-v1` | 71.8% | 76.6% | 93.8% | 79.6% | 60.6% | 12.1% |
+| `tfidf-svm-v1` | 81.2% | 82.8% | **98.0%** | 88.8% | 77.7% | 1.1% |
+| `tfidf-char-lr-v1` | 79.7% | 83.2% | 95.8% | 87.1% | 77.7% | 2.2% |
+| `visual-layout-v1`, image only | 73.4% | 87.5% | 84.0% | 77.2% | 51.1% | 44.0% |
+| **SVM + image, late fusion (β = 1)** | **89.6%** | 94.1% | 95.3% | **92.3%** | 85.1% | 46.2% |
+| SVM, image only where the SVM abstains (gated, β = 2) | **90.4%** | **98.4%** | 92.0% | 91.2% | **89.4%** | **50.5%** |
+
+Born-digital, clean and mild pages stay at 99–100% with both fusions.
+
+Development cross-validation chose β:
+
+| β | 0 | 0.25 | 0.5 | 1 | 2 |
+|---|---|---|---|---|---|
+| Late fusion | 81.8% | 83.3% | 84.7% | **86.7%** | 86.3% |
+| Gated | 81.8% | 83.1% | 84.5% | 87.1% | **88.4%** |
+
+Findings:
+- **The page image recovers what OCR loses.** On severe scans, where the text models are right on 1–2% of
+  documents, layout alone is right on 44%. Fused with the SVM it reaches 46–50%.
+- **Precision is the cost.** Fusion answers 94–98% of documents instead of 83%, but precision when answered falls
+  from 98.0% to 92–95%: the image answers documents the text model left to a reviewer, and some of those
+  answers are wrong.
+- **Choosing a fusion.** Late fusion has the best macro-F1 (92.3%) and keeps precision above 95%, so it is the
+  recommended setting. The gated variant answers more documents, at lower precision.
+
+### Folder suggestion (test set, leave-one-out over 606 documents, 6 department folders)
+
+| Method | Correct department |
+|---|---|
+| Always the most common folder | 22.3% |
+| The folder most used for the document's predicted type | 43.7% |
+| **`folder-knn-v1`: the 5 most similar documents vote (TF-IDF cosine)** | **58.6%** |
+| The same, correct folder among the 3 shown | **81.5%** |
+
+Department folders overlap in the types they hold, so the type alone cannot place a document. The documents'
+own words do better. The UI shows three suggestions and leaves the move to a person.
+
+### Search ablation and confidence-aware fusion (ADR 0014)
+`tools/search_experiments.py` on the stored layout-analysis OCR text, the same document-level ranked search as
+the API. Recall@10 / MRR@10.
+
+| Rankings fused | Dev: all | Dev: reference numbers | Test: all | Test: subjects | Test: reference numbers | Test: paraphrased |
+|---|---|---|---|---|---|---|
+| exact only | 51.4% / 33.7% | 6.7% / 6.7% | 46.2% / 27.1% | 60.8% / 34.8% | 8.0% / 7.0% | 3.7% / 1.7% |
+| BM25 stems only | 63.9% / 37.1% | 54.3% / 32.3% | 55.1% / 32.0% | 60.9% / 33.7% | 39.9% / 27.7% | 31.0% / 13.5% |
+| trigrams only | 53.4% / 30.8% | 24.4% / 22.9% | 47.8% / 27.1% | 58.0% / 30.8% | 21.0% / 17.3% | 30.1% / 13.0% |
+| **exact + stems (new default, `hybrid-rrf-v3`)** | **65.3% / 39.9%** | 53.0% / 31.2% | **58.1% / 33.0%** | 64.8% / 35.4% | **40.8% / 26.7%** | 33.4% / 15.1% |
+| exact + trigrams | 59.7% / 38.1% | 25.6% / 23.7% | 53.1% / 30.9% | 64.8% / 36.0% | 22.7% / 17.5% | 32.8% / 14.5% |
+| stems + trigrams | 56.9% / 32.8% | 36.0% / 26.0% | 50.6% / 28.9% | 59.5% / 31.6% | 27.3% / 22.0% | 31.0% / 13.6% |
+| exact + stems + trigrams (`hybrid-rrf-v1`, Sprints 7–11) | 60.9% / 37.6% | 37.2% / 26.8% | 54.9% / 32.5% | 64.5% / 36.2% | 29.8% / 22.7% | 33.4% / 14.9% |
+| the same + confidence-aware fusion, α = 0.25 | 60.6% / 37.1% | 36.0% / 25.2% | 54.6% / 32.0% | 64.5% / 36.2% | 29.0% / 20.9% | 32.8% / 15.4% |
+
+nDCG@10 over the original queries: exact + stems 45.1% (dev) and 38.4% (test), against 42.5% and 37.0% for the
+three-way fusion.
+
+Findings:
+- **The trigram ranking hurts.** Every fusion that includes it is below the same fusion without it, on both
+  sets and for reference numbers most of all (test 40.8% → 29.8%). A likely reason is that trigrams of digits
+  and of common words are shared by many documents and push the right one out of the top 10. The word index
+  already tolerates OCR errors in its own way, because any query word may match.
+- **The reference-number gain comes from BM25 over the word index:** exact search finds 8.0%, stems alone
+  39.9%.
+- **New default.** On the development set exact + stems was best by nDCG@10. The test set confirmed it (+3.2
+  points Recall@10, +0.5 MRR over the old default), so it became the default. Trigrams stay available
+  (`SMARTARCHIVE_SEARCH_COMPONENTS`).
+- **Confidence-aware fusion does not help.** The best weight on the development set, α = 0.25, was below the
+  plain fusion there and on the test set. It stays off (`SMARTARCHIVE_CONFIDENCE_ALPHA=0`), a measured negative
+  result. A likely reason is that page-level confidence is too coarse: a page with a low mean confidence can
+  still hold the query's words intact.

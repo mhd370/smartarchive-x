@@ -163,6 +163,10 @@ class Pipeline:
         encoder = semantic.load(settings.semantic_model_dir)  # optional dense ranking, as the API loads it
         if encoder:
             self.texts.semantic = semantic.SemanticIndex(encoder)
+        from smartarchive.search import rerank  # optional re-ranking and confidence-aware fusion (ADR 0014)
+        self.texts.reranker = rerank.load(settings.reranker_model_dir, settings.rerank_mode)
+        self.texts.confidence_alpha = settings.confidence_alpha
+        self.texts.components = settings.search_components
 
     def enrich(self, document_id: str):  # the same steps, in the same order, as the API's after_text_change hook
         self.metadata.run_quietly(document_id)
@@ -312,6 +316,7 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
                        for level in sorted({c['quality'] for c in classified})
                        for items in [[c for c in classified if c['quality'] == level]]},
         'confusion': [{'true': t, 'predicted': p, 'count': n} for (t, p), n in sorted(confusion.items())]}
+    classification.update(macro_scores(classified))
     classification['reclassification'] = reclassification_sweep(classified)
 
     predicted = [(back[s], back[t], kind) for s, t, kind in pipeline.predicted_relations() if s in back and t in back]
@@ -323,7 +328,11 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
         queries += json.loads((corpus / 'queries_paraphrase.json').read_text(encoding='utf-8'))
     queries = [q for q in queries if set(q['relevant']) <= keep]
     from smartarchive.search import ranked as ranked_module
-    ranked_method = ranked_module.METHOD_DENSE if getattr(pipeline.texts, 'semantic', None) else ranked_module.METHOD
+    ranked_method = ranked_module.method_name(pipeline.texts.components, bool(getattr(pipeline.texts, 'semantic', None)))
+    if getattr(pipeline.texts, 'confidence_alpha', 0.0):
+        ranked_method += f"+conf{pipeline.texts.confidence_alpha:g}"
+    if getattr(pipeline.texts, 'reranker', None):
+        ranked_method += '+ce-mminilm-v1'
     search = {'queries': len(queries)}
     for mode, run, method in (('ranked', pipeline.texts.search_ranked, ranked_method),
                               ('exact', pipeline.texts.search, 'substring-v1 (all terms, normalized)')):
@@ -352,6 +361,22 @@ def evaluate(corpus: Path, work: Path, limit: int | None = None, engine_factory=
     (work / 'report.json').write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding='utf-8')
     (work / 'report.md').write_text(markdown(report), encoding='utf-8')
     return report
+
+
+def macro_scores(classified: list[dict]) -> dict:
+    """Per-type precision/recall/F1 and their macro average. An abstention is a miss for recall and no prediction
+    for precision, so a model that abstains more keeps its precision but loses recall."""
+    per_class = {}
+    for label in sorted({c['type'] for c in classified}):
+        tp = sum(1 for c in classified if c['type'] == label and c['predicted'] == label)
+        fp = sum(1 for c in classified if c['type'] != label and c['predicted'] == label)
+        fn = sum(1 for c in classified if c['type'] == label and c['predicted'] != label)
+        precision = tp / (tp + fp) if tp + fp else 0.0
+        recall = tp / (tp + fn) if tp + fn else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        per_class[label] = {'precision': round(precision, 4), 'recall': round(recall, 4), 'f1': round(f1, 4),
+                            'documents': tp + fn}
+    return {'macro_f1': mean(v['f1'] for v in per_class.values()), 'per_class': per_class}
 
 
 def pct(value) -> str:
@@ -412,7 +437,8 @@ def markdown(report: dict) -> str:
                      f"{block['not_written_in_document']} |")
     lines += ['', f"## Classification ({cls.get('method', 'keywords')})", '',
               f"Accuracy {pct(cls['accuracy'])}, coverage {pct(cls['coverage'])}, precision when answered "
-              f"{pct(cls['precision_when_answered'])}, first level (group) {pct(cls['group_accuracy'])}.", '']
+              f"{pct(cls['precision_when_answered'])}, first level (group) {pct(cls['group_accuracy'])}, "
+              f"macro-F1 {pct(cls.get('macro_f1'))}.", '']
     if cls.get('reclassification'):
         chosen = cls['reclassification']['chosen']
         lines += [f"Reclassification ({cls['reclassification']['method']}, share ≥ {chosen['min_confidence']}, "

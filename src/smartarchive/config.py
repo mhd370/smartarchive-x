@@ -16,6 +16,9 @@ def find_tesseract(explicit: str | None = None) -> str | None:
     return None
 
 
+DEFAULT_CONFIDENCE_ALPHA = 0.0  # set from tools/search_experiments.py on the development set (ADR 0014)
+
+
 @dataclass(frozen=True)
 class Settings:
     storage_dir: Path = ROOT / 'storage'
@@ -44,6 +47,13 @@ class Settings:
     # Dense retrieval (search/semantic.py, ADR 0013): off unless SMARTARCHIVE_SEMANTIC=1 and the model is present;
     # it helped paraphrased queries on the development set but not on the held-out test set.
     semantic_model_dir: Path | None = None
+    # Cross-encoder re-ranking of the top 20 (search/rerank.py, ADR 0014): off unless SMARTARCHIVE_RERANK=1.
+    reranker_model_dir: Path | None = None
+    rerank_mode: str = 'fuse'
+    # Confidence-aware fusion (search/ranked.py, ADR 0014): 0 turns it off.
+    confidence_alpha: float = 0.0
+    # Rankings fused by ranked search (ADR 0014): exact, words (BM25 stems), grams (trigrams), dense.
+    search_components: tuple[str, ...] = ('exact', 'words', 'dense')
     review_confidence_threshold: float = 0.60
     quality_weights: tuple[float, float, float, float, float] = (0.2, 0.2, 0.2, 0.2, 0.2)
 
@@ -76,4 +86,11 @@ class Settings:
                    semantic_model_dir=(Path(os.environ['SMARTARCHIVE_SEMANTIC_MODEL']).resolve()
                                        if os.getenv('SMARTARCHIVE_SEMANTIC_MODEL') else ROOT / 'models' / 'semantic'
                                        / 'multilingual-e5-small') if flag('SMARTARCHIVE_SEMANTIC', 'false') else None,
+                   reranker_model_dir=(Path(os.environ['SMARTARCHIVE_RERANK_MODEL']).resolve()
+                                       if os.getenv('SMARTARCHIVE_RERANK_MODEL') else ROOT / 'models' / 'reranker'
+                                       / 'mmarco-mMiniLMv2-L12') if flag('SMARTARCHIVE_RERANK', 'false') else None,
+                   rerank_mode=os.getenv('SMARTARCHIVE_RERANK_MODE', 'fuse'),
+                   search_components=tuple(c.strip() for c in os.getenv(
+                       'SMARTARCHIVE_SEARCH_COMPONENTS', 'exact,words,dense').split(',') if c.strip()),
+                   confidence_alpha=float(os.getenv('SMARTARCHIVE_CONFIDENCE_ALPHA', str(DEFAULT_CONFIDENCE_ALPHA))),
                    ocr_worker=flag('SMARTARCHIVE_OCR_WORKER', 'true'))
