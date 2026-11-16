@@ -1,0 +1,9 @@
+# Railway: build the API from the Dockerfile; /api/health tells Railway the server is up.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"

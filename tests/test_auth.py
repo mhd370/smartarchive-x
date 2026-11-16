@@ -145,5 +145,19 @@ class AuthTests(unittest.TestCase):
                     db.execute(sql)
 
 
+class SetupTokenTests(unittest.TestCase):
+    """A public server can require a setup code before anyone may create the first admin."""
+    def test_setup_needs_the_configured_code(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        settings = Settings(storage_dir=Path(temp.name), ocr_auto=False, ocr_worker=False, setup_token='open-sesame-42')
+        client = self.enterContext(TestClient(create_app(settings)))
+        self.assertTrue(client.get('/api/auth/status').json()['setup_token_required'])
+        self.assertEqual(client.post('/api/auth/setup', json=ADMIN).status_code, 403)
+        self.assertEqual(client.post('/api/auth/setup', json={**ADMIN, 'setup_token': 'wrong'}).status_code, 403)
+        self.assertEqual(client.post('/api/auth/setup', json={**ADMIN, 'setup_token': 'open-sesame-42'}).status_code, 201)
+        self.assertFalse(client.get('/api/auth/status').json()['setup_token_required'])
+
+
 if __name__ == '__main__':
     unittest.main()

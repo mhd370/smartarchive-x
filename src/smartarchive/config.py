@@ -52,6 +52,8 @@ class Settings:
     rerank_mode: str = 'fuse'
     # Confidence-aware fusion (search/ranked.py, ADR 0014): 0 turns it off.
     confidence_alpha: float = 0.0
+    # First-run admin setup on a public server: when set, creating the first admin needs this code (deploy guide).
+    setup_token: str | None = None
     # Rankings fused by ranked search (ADR 0014): exact, words (BM25 stems), grams (trigrams), dense.
     search_components: tuple[str, ...] = ('exact', 'words', 'dense')
     review_confidence_threshold: float = 0.60
@@ -90,6 +92,7 @@ class Settings:
                                        if os.getenv('SMARTARCHIVE_RERANK_MODEL') else ROOT / 'models' / 'reranker'
                                        / 'mmarco-mMiniLMv2-L12') if flag('SMARTARCHIVE_RERANK', 'false') else None,
                    rerank_mode=os.getenv('SMARTARCHIVE_RERANK_MODE', 'fuse'),
+                   setup_token=os.getenv('SMARTARCHIVE_SETUP_TOKEN') or None,
                    search_components=tuple(c.strip() for c in os.getenv(
                        'SMARTARCHIVE_SEARCH_COMPONENTS', 'exact,words,dense').split(',') if c.strip()),
                    confidence_alpha=float(os.getenv('SMARTARCHIVE_CONFIDENCE_ALPHA', str(DEFAULT_CONFIDENCE_ALPHA))),

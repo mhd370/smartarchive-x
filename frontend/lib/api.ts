@@ -38,7 +38,7 @@ export type OcrPage = { run_id: string; page: number; analysis: PageAnalysis | n
 export type AuditEvent = { sequence: number; action: string; actor: string; timestamp: string };
 export type User = { id: string; username: string; display_name: string; role: Role; active: boolean;
   created_at: string; permissions: Permission[] };
-export type AuthStatus = { setup_required: boolean; authenticated: boolean };
+export type AuthStatus = { setup_required: boolean; setup_token_required?: boolean; authenticated: boolean };
 export type TextSource = "ocr" | "review";
 export type BackupItem = { name: string; size_bytes: number; modified_at: string; created_at?: string; created_by?: string;
   app_version?: string; schema_version?: number; document_count?: number; original_bytes?: number; unreadable?: boolean };

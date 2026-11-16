@@ -17,6 +17,7 @@ function LoginForm() {
   const [status, setStatus] = useState<AuthStatus>(), [loadError, setLoadError] = useState("");
   const [username, setUsername] = useState(""), [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState(""), [confirm, setConfirm] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const next = params.get("next");
   const target = next && next.startsWith("/") && !next.startsWith("//") && next !== "/login" ? next : "/";
@@ -35,7 +36,8 @@ function LoginForm() {
     setBusy(true);
     try {
       const user = status?.setup_required
-        ? await post<User>("/auth/setup", { username, password, display_name: displayName })
+        ? await post<User>("/auth/setup", { username, password, display_name: displayName,
+          ...(status?.setup_token_required ? { setup_token: setupToken } : {}) })
         : await post<User>("/auth/login", { username, password });
       signedIn(user);
       router.replace(target);
@@ -51,6 +53,7 @@ function LoginForm() {
     {loadError ? <Failure message={loadError} retry={() => window.location.reload()} /> : !status ? <Loading label="جار التحقق من حالة النظام…" /> : <form onSubmit={submit}>
       <h1>{setup ? "إعداد حساب المدير" : "تسجيل الدخول"}</h1>
       <p>{setup ? "هذا أول تشغيل للنظام. أنشئ حساب مدير النظام لإدارة المستخدمين والصلاحيات." : "سجّل الدخول للوصول إلى مساحة الأرشيف."}</p>
+      {setup && status?.setup_token_required && <label className="field"><span>رمز الإعداد</span><input dir="ltr" type="password" value={setupToken} onChange={e => setSetupToken(e.target.value)} required autoComplete="off" /></label>}
       {setup && <label className="field"><span>الاسم الظاهر</span><input value={displayName} onChange={e => setDisplayName(e.target.value)} required maxLength={80} autoComplete="name" /></label>}
       <label className="field"><span>اسم المستخدم</span><input dir="ltr" value={username} onChange={e => setUsername(e.target.value)} required minLength={3} maxLength={40} autoComplete="username" /></label>
       <label className="field"><span>كلمة المرور</span><input dir="ltr" type="password" value={password} onChange={e => setPassword(e.target.value)} required minLength={setup ? 8 : 1} autoComplete={setup ? "new-password" : "current-password"} /></label>

@@ -47,6 +47,7 @@ class Credentials(BaseModel):
 
 class SetupRequest(Credentials):
     display_name: str
+    setup_token: str | None = None
 
 
 class UserCreate(SetupRequest):

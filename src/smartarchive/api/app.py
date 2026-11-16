@@ -1,5 +1,6 @@
 """Local document archive API. Run uvicorn with --app-dir src."""
 from contextlib import asynccontextmanager
+import hmac
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -128,11 +129,15 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
 
     @api.get('/api/auth/status')
     def auth_status(request: Request):
-        return {'setup_required': accounts.setup_required(),
+        required = accounts.setup_required()
+        return {'setup_required': required, 'setup_token_required': bool(required and settings.setup_token),
                 'authenticated': accounts.user_for(request.cookies.get(COOKIE)) is not None}
 
     @api.post('/api/auth/setup', status_code=201)
     def setup(body: SetupRequest, response: Response):
+        if settings.setup_token and not hmac.compare_digest((body.setup_token or '').encode(),
+                                                            settings.setup_token.encode()):
+            raise ArchiveError('setup_token_invalid', 'رمز الإعداد غير صحيح.', 403)
         accounts.create(body.username, body.password, body.display_name, 'admin', 'setup', only_if_empty=True)
         token, user = accounts.login(body.username, body.password)
         start_session(response, token)
