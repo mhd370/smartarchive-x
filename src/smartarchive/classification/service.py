@@ -7,6 +7,8 @@
   the latest suggestion (state `suggested`, or `uncertain` when the classifier abstained).
 - Suggestions come from the learned model (learned.py) once one has been trained on confirmed decisions, and
   from the keyword baseline before that. Every suggestion records its method and, for the model, its id.
+- Multimodal (ADR 0015): `page_image(document_id)` renders the first page of the stored original; its layout
+  features (visual.py) are cached in `document_images` and fused with the text when the model has an image part.
 - Reclassification (reclassify.py): a suggestion newer than the latest decision that disagrees with it strongly
   enough is shown as a proposal. A person accepts it (a decision with a reason) or dismisses it.
 """
@@ -19,7 +21,7 @@ import uuid
 
 from smartarchive.domain.documents import ArchiveError
 from smartarchive.persistence.database import Database, now
-from . import learned, reclassify
+from . import learned, reclassify, visual
 from .classifier import DEFAULT_CATEGORIES, GROUPS, METHOD, TAXONOMY_VERSION, Category, classify
 
 log = logging.getLogger(__name__)
@@ -47,9 +49,10 @@ def _row(row) -> dict:
 
 class Classifications:
     def __init__(self, db: Database, min_score: float = 3.0, min_confidence: float = 0.5,
-                 models_dir: Path | None = None):
+                 models_dir: Path | None = None, page_image=None):
         self.db, self.min_score, self.min_confidence = db, min_score, min_confidence
         self.models_dir = models_dir
+        self.page_image = page_image  # callable(document_id) -> first page as a PIL image, or None
         self._model, self._model_stamp = None, None
 
     # -- learned model --------------------------------------------------------------------------
@@ -73,14 +76,38 @@ class Classifications:
         return {'active_method': model['card'].get('method', learned.METHOD) if model else METHOD, 'model': model['card'] if model else None,
                 'confirmed_examples': _count(self.training_set()[2]), 'min_per_category': learned.MIN_PER_CLASS}
 
+    def image_features(self, document_id: str):
+        """First-page layout features (cached); None when there is no image source or the page cannot be read."""
+        import numpy as np
+        with self.db.connect() as db:
+            row = db.execute('SELECT features FROM document_images WHERE document_id=? AND method=?',
+                             (document_id, visual.METHOD)).fetchone()
+        if row:
+            return np.frombuffer(row['features'], dtype=np.float32)
+        if not self.page_image:
+            return None
+        try:
+            image = self.page_image(document_id)
+            if image is None:
+                return None
+            vector = visual.features(image).astype(np.float32)
+        except Exception:  # a missing or unreadable original only means no image evidence
+            log.exception('Page-image features failed for %s', document_id)
+            return None
+        with self.db.connect() as db:
+            db.execute('INSERT OR REPLACE INTO document_images(document_id,method,features,created_at) VALUES (?,?,?,?)',
+                       (document_id, visual.METHOD, vector.tobytes(), now()))
+        return vector
+
     def training_set(self) -> tuple[list[str], list[str], list[str]]:
         """(texts, filenames, labels) of documents a person classified (their latest decision) that have text."""
         with self.db.connect() as db:
-            rows = db.execute("""SELECT d.filename, (SELECT category_id FROM classifications c
+            rows = db.execute("""SELECT d.id, d.filename, (SELECT category_id FROM classifications c
                 WHERE c.document_id=d.id AND c.kind='decision' ORDER BY c.sequence DESC LIMIT 1) AS label,
                 (SELECT group_concat(text, char(10)) FROM (SELECT text FROM page_texts t WHERE t.document_id=d.id
                  ORDER BY page_no)) AS text FROM documents d ORDER BY d.created_at""").fetchall()
         rows = [row for row in rows if row['label'] and row['text']]
+        self._training_ids = [r['id'] for r in rows]
         return [r['text'] for r in rows], [r['filename'] for r in rows], [r['label'] for r in rows]
 
     def train(self, actor: str) -> dict:
@@ -88,8 +115,10 @@ class Classifications:
         if not self.models_dir:
             raise ArchiveError('no_model_storage', 'لا يوجد مكان لحفظ النموذج.', 500)
         texts, filenames, labels = self.training_set()
+        images = [self.image_features(i) for i in self._training_ids] if self.page_image else None
         try:
-            model = learned.train(texts, filenames, labels, f'archive decisions ({len(labels)} documents) by {actor}')
+            model = learned.train(texts, filenames, labels, f'archive decisions ({len(labels)} documents) by {actor}',
+                                  images=images)
         except ValueError as exc:
             raise ArchiveError('not_enough_examples', 'يلزم تأكيد ثلاث وثائق على الأقل من فئتين أو أكثر قبل التدريب.',
                                422) from exc
@@ -262,6 +291,9 @@ class Classifications:
 
     def suggest(self, document_id: str, actor: str = SYSTEM, trigger: str = 'auto', force: bool = False) -> dict | None:
         """Write a new suggestion unless nothing changed since the previous one (or `force`)."""
+        model = self.model()
+        # rendered before the write transaction so the database is not locked while the page is read
+        image = self.image_features(document_id) if model and model.get('image') is not None else None
         with self.db.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             document = db.execute('SELECT * FROM documents WHERE id=?', (document_id,)).fetchone()
@@ -275,12 +307,12 @@ class Classifications:
             categories = [Category(row['id'], row['name'], json.loads(row['keywords']), row['group_id']) for row in
                           db.execute('SELECT c.*, m.group_id FROM categories c LEFT JOIN category_group_members m'
                                      ' ON m.category_id=c.id WHERE c.active=1 ORDER BY c.id').fetchall()]
-            model = self.model()
             if model:
                 result = learned.predict(model, text, document['filename'], {c.id: c.group_id for c in categories},
-                                         {c.id for c in categories})
-                method = model['card'].get('method', learned.METHOD)
+                                         {c.id for c in categories}, image)
+                method = learned.method_name(model, result.image_used)
                 basis['model_id'] = model['card'].get('id')
+                basis['image_used'] = result.image_used
             else:
                 result = classify(text, document['filename'], categories, self.min_score, self.min_confidence)
                 method = METHOD

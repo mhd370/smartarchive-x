@@ -17,6 +17,12 @@ def find_tesseract(explicit: str | None = None) -> str | None:
 
 
 DEFAULT_CONFIDENCE_ALPHA = 0.0  # set from tools/search_experiments.py on the development set (ADR 0014)
+# set from tools/ocr_paths_experiment.py on the development set (ADR 0016)
+# Test set: CER 32.1% (standard alone) -> 27.8% at about 3.4x the OCR time; SMARTARCHIVE_OCR_PATHS=standard
+# restores the single fast path.
+DEFAULT_OCR_PATHS = ('standard', 'binarized', 'upscaled')
+DEFAULT_OCR_PATH_RULE = 'confident-chars'
+DEFAULT_OCR_PATH_GATE = 1.0
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,11 @@ class Settings:
     ocr_page_timeout_seconds: int = 120
     # Ruled tables cell by cell and two-column reading order (processing/layout.py, ADR 0012).
     layout_analysis: bool = True
+    # OCR paths read per page and the automatic choice between them (processing/paths.py, ADR 0016).
+    # One path = the single-path pipeline. Defaults are chosen on the development set.
+    ocr_paths: tuple[str, ...] = DEFAULT_OCR_PATHS
+    ocr_path_rule: str = DEFAULT_OCR_PATH_RULE
+    ocr_path_gate: float = DEFAULT_OCR_PATH_GATE
     # Dense retrieval (search/semantic.py, ADR 0013): off unless SMARTARCHIVE_SEMANTIC=1 and the model is present;
     # it helped paraphrased queries on the development set but not on the held-out test set.
     semantic_model_dir: Path | None = None
@@ -85,6 +96,10 @@ class Settings:
                    if os.getenv('SMARTARCHIVE_TESSDATA_DIR') else None,
                    ocr_auto=flag('SMARTARCHIVE_OCR_AUTO', 'true'),
                    layout_analysis=flag('SMARTARCHIVE_LAYOUT', 'true'),
+                   ocr_paths=tuple(c.strip() for c in os.getenv(
+                       'SMARTARCHIVE_OCR_PATHS', ','.join(DEFAULT_OCR_PATHS)).split(',') if c.strip()),
+                   ocr_path_rule=os.getenv('SMARTARCHIVE_OCR_PATH_RULE', DEFAULT_OCR_PATH_RULE),
+                   ocr_path_gate=float(os.getenv('SMARTARCHIVE_OCR_PATH_GATE', str(DEFAULT_OCR_PATH_GATE))),
                    semantic_model_dir=(Path(os.environ['SMARTARCHIVE_SEMANTIC_MODEL']).resolve()
                                        if os.getenv('SMARTARCHIVE_SEMANTIC_MODEL') else ROOT / 'models' / 'semantic'
                                        / 'multilingual-e5-small') if flag('SMARTARCHIVE_SEMANTIC', 'false') else None,

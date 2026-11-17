@@ -15,6 +15,7 @@ from smartarchive.persistence.database import Database, now
 from smartarchive.persistence.storage import OriginalStore
 from .ocr import Engine, TesseractEngine, Word, mean_confidence
 from .layout import read_page
+from . import paths as ocr_paths, regions
 from .preprocess import prepare
 from .quality import BOUNDS, assess
 from .render import page_images
@@ -37,6 +38,7 @@ class OcrService:
         self._factory = engine_factory
         self._engine: Engine | None = None
         self._engine_error: str | None = None
+        self._extra_engines: dict[str, Engine] = {}
 
     # -- engine -------------------------------------------------------------------------------
     def engine(self) -> Engine | None:
@@ -54,6 +56,45 @@ class OcrService:
                 self._engine_error = f'{type(exc).__name__}: {exc}'[:300]
         return self._engine
 
+    def engine_for(self, languages: str | None) -> Engine:
+        """The default engine, or one with other languages for an OCR path such as `model-ara` (paths.py)."""
+        engine = self.engine()
+        if not languages or not isinstance(engine, TesseractEngine):
+            return engine
+        if languages not in self._extra_engines:
+            self._extra_engines[languages] = TesseractEngine(self.settings.tesseract, languages,
+                                                             self.settings.ocr_page_timeout_seconds,
+                                                             self.settings.tessdata_dir)
+        return self._extra_engines[languages]
+
+    def read(self, image) -> tuple[list, list]:
+        """Lines of a prepared page and the steps that produced them (layout analysis, OCR path choice)."""
+        settings = self.settings
+        reader = read_page if settings.layout_analysis else (lambda engine, page: (engine.recognize(page), None))
+        if len(settings.ocr_paths) > 1:
+            lines, steps = ocr_paths.read(self.engine_for, image, settings.ocr_paths, settings.ocr_path_rule,
+                                          settings.ocr_path_gate, reader)
+            return lines, [step for step in (steps['layout'], steps['paths']) if step]
+        lines, layout = reader(self.engine(), image)
+        return lines, [layout] if layout else []
+
+    @staticmethod
+    def _regions(prepared, lines, read_steps, width: int, height: int) -> dict:
+        """Heading, stamp and figure regions (regions.py) as normalized boxes on the original page."""
+        tables = [t['box'] for step in read_steps if step.get('step') == 'layout' for t in step.get('tables') or []]
+        try:
+            found = regions.find(prepared.image, lines, tables)
+        except Exception as exc:  # regions are evidence for people; they never fail an OCR run
+            log.exception('Region detection failed')
+            return {'step': 'regions', 'method': regions.METHOD, 'error': f'{type(exc).__name__}: {exc}'[:200]}
+        out = []
+        for region in found:
+            item = {'kind': region['kind'], 'box': list(prepared.to_original(region['box'], width, height))}
+            if region.get('text'):
+                item['text'] = region['text'][:160]
+            out.append(item)
+        return {'step': 'regions', 'method': regions.METHOD, 'regions': out}
+
     def info(self) -> dict:
         engine = self.engine()
         if not engine:
@@ -62,7 +103,10 @@ class OcrService:
         return {'configured': True, 'engine': engine.name, 'version': engine.version(),
                 'languages': getattr(engine, 'languages', None),
                 'missing_languages': getattr(engine, 'missing', []), 'error': None,
-                'layout': 'layout-v1' if self.settings.layout_analysis else 'none'}
+                'layout': 'layout-v1' if self.settings.layout_analysis else 'none',
+                'paths': {'method': ocr_paths.METHOD, 'paths': list(self.settings.ocr_paths),
+                          'rule': self.settings.ocr_path_rule, 'gate': self.settings.ocr_path_gate}
+                if len(self.settings.ocr_paths) > 1 else None}
 
     # -- queue ----------------------------------------------------------------------------------
     def enqueue(self, document: dict, actor: str, trigger: str) -> dict:
@@ -74,7 +118,9 @@ class OcrService:
                'languages': getattr(engine, 'languages', self.settings.ocr_languages),
                'params': json.dumps({'dpi': self.settings.ocr_dpi, 'psm': 3, 'oem': 1, 'trigger': trigger,
                                      'quality_weights': self.settings.quality_weights,
-                                     'review_threshold': self.settings.review_confidence_threshold}),
+                                     'review_threshold': self.settings.review_confidence_threshold,
+                                     'ocr_paths': list(self.settings.ocr_paths), 'ocr_path_rule': self.settings.ocr_path_rule,
+                                     'ocr_path_gate': self.settings.ocr_path_gate}),
                'created_by': actor, 'created_at': now(), 'pages_total': document['page_count'], 'pages_done': 0}
         with self.db.connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -142,11 +188,10 @@ class OcrService:
             if not quality.blank:
                 prepared = prepare(image, quality, self.settings.tesseract)
                 steps = prepared.steps
+                recognized, read_steps = self.read(prepared.image)
+                steps = steps + read_steps
                 if self.settings.layout_analysis:
-                    recognized, layout_step = read_page(engine, prepared.image)
-                    steps = steps + [layout_step]
-                else:
-                    recognized = engine.recognize(prepared.image)
+                    steps = steps + [self._regions(prepared, recognized, read_steps, width, height)]
                 for line in recognized:
                     words = [{'text': w.text, 'confidence': w.confidence,
                               'box': prepared.to_original(w.box, width, height)} for w in line.words]

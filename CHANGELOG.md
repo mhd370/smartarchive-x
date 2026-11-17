@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.18.0 — Sprint 13 / Task 018
+- Three OCR paths per page with an automatic choice (`processing/paths.py`, `ocr-paths-v1`, ADR 0016):
+  - the paths are standard, binarized (adaptive threshold of the OCR input only) and upscaled (1.5×);
+  - the choice per page is by confidence × characters read;
+  - test set CER 32.1% → 27.8% (oracle 26.4%), severe scans 95.4% → 78.3%, at about 3.4× the OCR time;
+  - this is now the default; `SMARTARCHIVE_OCR_PATHS=standard` restores the single path;
+  - every page records each path's confidence and the path chosen;
+  - measured with `tools/ocr_paths_experiment.py`.
+- Heading, stamp and figure regions (`processing/regions.py`, `regions-v1`):
+  - recorded per page and drawn over the document preview;
+  - test set: heading precision 80.6% and recall 58.1%; stamp precision 99.7% and recall 71.1% (100% / 100% on
+    readable pages; detection fails on medium and severe scans);
+  - measured with `tools/region_experiment.py`.
+- The multimodal classifier is used by the service:
+  - training stores first-page layout features (`document_images`, migration 9) and trains an image model next
+    to the text model;
+  - suggestions fuse the two (`tfidf-svm-v1+visual-layout-v1`), so a page with no OCR text is still classified;
+  - the document page and the System page say when the page image was used.
+- Deployment: optional `SMARTARCHIVE_SETUP_TOKEN` for the first admin, `railway.toml`, persistent `/data`
+  storage, `docs/deployment.md`.
+
 ## 0.17.1 — documentation
 - Cross-encoder results on the held-out test set: paraphrased queries 33.4% → 43.4% Recall@10, 14.9% → 20.9%
   MRR, original-query MRR 32.5% → 34.0%, at about 3 s per query; it stays optional (ADR 0014).

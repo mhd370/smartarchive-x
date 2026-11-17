@@ -78,8 +78,11 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual((page['page_no'], page['dpi'], page['dpi_source']), (1, 300.0, 'metadata'))
         self.assertTrue(0 <= page['quality_score'] <= 1)
         self.assertIn('sharpness', page['metrics'])
-        self.assertEqual([s['step'] for s in page['preprocessing']][-2:], ['binarization', 'layout'])
-        self.assertEqual(page['preprocessing'][-1]['method'], 'none')  # the fake engine reads no blocks
+        steps = {s['step']: s for s in page['preprocessing']}
+        self.assertEqual([s['step'] for s in page['preprocessing']][-4:], ['binarization', 'layout', 'ocr_paths', 'regions'])
+        self.assertEqual(steps['layout']['method'], 'none')  # the fake engine reads no blocks
+        self.assertEqual(steps['ocr_paths']['chosen'], 'standard')  # same text on every path: the first wins
+        self.assertEqual(set(steps['ocr_paths']['tried']), {'standard', 'binarized', 'upscaled'})
         lines = client.get(f"/api/documents/{document['id']}/ocr/pages/1").json()['lines']
         self.assertEqual(lines[0]['text'], 'قرار إداري')
         x0, y0, x1, y1 = lines[0]['box']

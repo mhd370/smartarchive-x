@@ -308,3 +308,54 @@ Findings:
 - **Setting.** It stays an option (`SMARTARCHIVE_RERANK=1`), recommended where people search in their own words.
   It was measured on the old three-way fusion. Re-ranking on top of the new default (exact + stems) is the next
   measurement.
+
+## Sprint 13: OCR paths, page regions (ADR 0016)
+
+### OCR paths (`ocr-paths-v1`)
+`tools/ocr_paths_experiment.py` reads a stratified sample (documents without relations, in manifest order) on
+four paths with the archive's own preprocessing and layout analysis (`script/Arabic+ara`, 200 dpi). The path
+set, choice rule and gate were chosen on corpus_v1 (14 documents per scan level, 71 pages). They were then
+measured once on corpus_v2 (20 per level, 103 pages). CER is normalized-v1, micro-averaged; time is OCR seconds
+per page for the paths read.
+
+| Test set (103 pages) | CER | s/page | Born-digital | Clean | Mild | Medium | Severe |
+|---|---|---|---|---|---|---|---|
+| `standard` alone (the single path until v0.17) | 32.1% | 3.1 | 12.2% | 7.6% | 8.2% | 30.1% | 95.4% |
+| `binarized` alone | 31.1% | 3.4 | 9.0% | 8.6% | 10.1% | 43.3% | 78.4% |
+| `upscaled` alone | 34.8% | 3.9 | 12.8% | 12.0% | 15.2% | 32.4% | 95.3% |
+| `model-ara` alone | 31.8% | 1.6 | 12.6% | 8.0% | 8.8% | 28.2% | 94.9% |
+| **chosen: standard + binarized + upscaled, `confident-chars`** | **27.8%** | 10.4 | 9.9% | 7.2% | 6.7% | 31.2% | 78.3% |
+| Oracle (best path per page; no rule can know it) | 26.4% | 12.0 | 8.3% | 6.3% | 6.2% | 27.9% | 77.9% |
+
+The development set gave the same ordering: standard 31.0%, chosen configuration 27.2%, oracle 26.2%.
+- **Choice rules.** On the development set, `confident-chars` (27.2%) beat `confidence` (28.5%), which
+  prefers short, confident fragments.
+- **Gate.** Gates of 0.9 and below changed nothing, because few pages reach a mean confidence of 0.9, so the gate
+  stays at 1.
+- **Result on the test set.** The choice removes 4.3 points of CER, 1.4 points from the oracle, at about 3.4
+  times the OCR time.
+- **Where the gain comes from.** It comes mostly from severe scans, where the thresholded page is far easier to
+  read (95.4% → 78.3%), and from born-digital and mild pages. Medium scans lose 1.1 points.
+
+The three paths are now the service default. `SMARTARCHIVE_OCR_PATHS=standard` restores the single, faster path.
+Earlier tables in this file were measured with the single path.
+
+### Heading and stamp regions (`regions-v1`)
+`tools/region_experiment.py` uses the stored OCR lines of each corpus, with no new OCR, and scores against the
+ground-truth block boxes. A predicted heading counts as correct when at least half of it lies in a header or
+title block, and a header or title block counts as found when half of it is covered. A stamp counts when the
+boxes overlap with IoU ≥ 0.3. The thresholds were set by hand, not on these corpora.
+
+| Pages | Heading precision | Heading recall | Stamp precision | Stamp recall |
+|---|---|---|---|---|
+| Development, all (499) | 83.8% | 62.8% | 100% | 71.2% (330 stamps) |
+| **Test, all (624)** | **80.6%** | **58.1%** | **99.7%** | **71.1%** (408 stamps) |
+| Test, born-digital (248) | 95.1% | 78.0% | 100% | 100% |
+| Test, clean (92) | 98.6% | 71.7% | 100% | 100% |
+| Test, mild (92) | 85.5% | 70.6% | 100% | 100% |
+| Test, medium (98) | 9.1% | 29.3% | 100% | 3.2% |
+| Test, severe (94) | 12.0% | 9.3% | — | 0% |
+
+On readable pages every stamp is found, and predicted headings are almost always real headers or titles. Heading
+recall is lower than precision: about two in five header or title blocks are not covered by a predicted heading. On medium and severe scans
+the rings break into fragments and the OCR lines are noise, so neither detector works there.

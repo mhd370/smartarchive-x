@@ -1,4 +1,5 @@
-"""Learned classifier (tfidf-svm-v1): training on confirmed decisions, explained suggestions, abstention."""
+"""Learned classifier (tfidf-svm-v1): training on confirmed decisions, explained suggestions, abstention, and the
+multimodal fusion with first-page layout features (visual-layout-v1)."""
 from pathlib import Path
 import sys
 import tempfile
@@ -61,6 +62,55 @@ class LearnedModelTests(unittest.TestCase):
             learned.train(texts, ['x'] * len(texts), labels, source='test', method='nope')
 
 
+def page(kind: str, n: int):
+    """A synthetic first page: invoices are ruled tables, minutes are plain paragraphs."""
+    from PIL import Image, ImageDraw
+    image = Image.new('RGB', (600, 850), 'white')
+    draw = ImageDraw.Draw(image)
+    if kind == 'invoice':
+        for y in range(250 + n * 3, 700, 40):
+            draw.line((40, y, 560, y), fill='black', width=3)
+        for x in (40, 200, 380, 560):
+            draw.line((x, 250 + n * 3, x, 690), fill='black', width=3)
+    else:
+        for y in range(120 + n * 3, 760, 22):
+            draw.rectangle((60 + (y % 50), y, 540, y + 9), fill='black')
+    return image
+
+
+class MultimodalTests(unittest.TestCase):
+    def test_the_image_model_is_trained_saved_and_fused(self):
+        from smartarchive.classification import visual
+        texts, labels, images = [], [], []
+        for n in range(1, 5):
+            for kind, templates in (('invoice', INVOICES), ('minutes', MINUTES)):
+                for template in templates:
+                    texts.append(template.format(n=n))
+                    labels.append(kind)
+                    images.append(visual.features(page(kind, n)))
+        model = learned.train(texts, ['scan.png'] * len(texts), labels, source='test', images=images)
+        self.assertEqual((model['card']['image_method'], model['card']['beta']), ('visual-layout-v1', 1.0))
+        groups = {'invoice': 'financial', 'minutes': 'administrative'}
+        # A page without text: the text model alone abstains, the image decides.
+        self.assertEqual(learned.predict(model, '', 'x.png', groups, set(groups)).reason, 'no_text')
+        blank = learned.predict(model, '', 'x.png', groups, set(groups), visual.features(page('invoice', 7)))
+        self.assertEqual((blank.category_id, blank.image_used), ('invoice', True))
+        self.assertEqual(learned.method_name(model, blank.image_used), 'tfidf-svm-v1+visual-layout-v1')
+        with tempfile.TemporaryDirectory() as folder:
+            learned.save(model, Path(folder))
+            loaded = learned.load(Path(folder))
+            self.assertIsNotNone(loaded['image'])
+            again = learned.predict(loaded, '', 'x.png', groups, set(groups), visual.features(page('minutes', 7)))
+            self.assertEqual(again.category_id, 'minutes')
+            # retrained without images: the stale image model is removed, never fused with the new text model
+            learned.save(learned.train(texts, ['scan.png'] * len(texts), labels, source='test'), Path(folder))
+            self.assertIsNone(learned.load(Path(folder))['image'])
+        # Too few images per class: text only.
+        few = learned.train(texts, ['scan.png'] * len(texts), labels, source='test', images=images[:2] + [None] * 22)
+        self.assertIsNone(few['image'])
+        self.assertNotIn('image_method', few['card'])
+
+
 class ServiceTrainingTests(unittest.TestCase):
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
@@ -101,6 +151,30 @@ class ServiceTrainingTests(unittest.TestCase):
         # Confirmed documents keep their category: a decision always wins over a new suggestion.
         decided = self.classes.get(self.document(MINUTES[0].format(n=9)))
         self.assertIn(decided['state'], ('none', 'suggested', 'uncertain'))
+
+    def test_the_service_fuses_the_first_page_image(self):
+        pages = {}
+        self.classes.page_image = lambda document_id: pages.get(document_id)
+        for n in range(1, 4):
+            for kind, templates in (('invoice', INVOICES), ('minutes', MINUTES)):
+                for template in templates:
+                    doc = self.document(template.format(n=n))
+                    pages[doc] = page(kind, n)
+                    self.classes.suggest(doc)
+                    self.classes.decide(doc, kind, '', self.classes.get(doc)['sequence'], 'reviewer')
+        card = self.classes.train('admin')
+        self.assertEqual(card['image_method'], 'visual-layout-v1')
+        with self.db.connect() as db:  # features are cached, not recomputed from the original
+            self.assertEqual(db.execute('SELECT COUNT(*) FROM document_images').fetchone()[0], 18)
+        # A severe scan: OCR read almost nothing, but the page is a ruled table.
+        scan = self.document('ـ')
+        pages[scan] = page('invoice', 5)
+        suggestion = self.classes.suggest(scan, force=True)
+        self.assertEqual((suggestion['method'], suggestion['category_id']), ('tfidf-svm-v1+visual-layout-v1', 'invoice'))
+        # Without a readable original the suggestion falls back to the text model.
+        lost = self.document(INVOICES[0].format(n=8))
+        suggestion = self.classes.suggest(lost)
+        self.assertEqual((suggestion['method'], suggestion['category_id']), ('tfidf-svm-v1', 'invoice'))
 
 
 if __name__ == '__main__':

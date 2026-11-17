@@ -69,6 +69,7 @@ export function ClassificationPanel({ documentId, onChanged }: { documentId: str
       {typeof suggestion.basis.group_id === "string" && <p className="group-line">المستوى الأول: <b>{groupNames[suggestion.basis.group_id] ?? suggestion.basis.group_id}</b>
         {typeof suggestion.basis.group_confidence === "number" && ` · ثقة ${percent(suggestion.basis.group_confidence)}`}
         {!suggestion.category_id && " · النوع الفرعي غير مؤكد ويحتاج مراجعة"}</p>}
+      {suggestion.basis.image_used === true && <p className="muted small-note">بُني على النص وشكل الصفحة الأولى معًا (جداول، أعمدة، ترويسة).</p>}
       {evidence.length > 0 && <ul className="keyword-list" aria-label="الكلمات التي بُني عليها الاقتراح">
         {evidence.slice(0, 6).map(hit => <li key={hit.keyword}><span dir="auto">{hit.keyword}</span>
           <small>{hit.count ? `×${number(hit.count)}` : ""}{hit.heading ? " · في العنوان" : ""}{hit.filename ? " · في اسم الملف" : ""}</small></li>)}

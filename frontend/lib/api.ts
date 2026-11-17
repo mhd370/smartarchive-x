@@ -94,7 +94,8 @@ export type SearchPage = { page_no: number; source: TextSource; revision: number
 export type SearchItem = { document: DocumentRecord; score: number; filename_match: boolean; matched_pages: number;
   pages: SearchPage[] };
 export type ClassifierCard = { id: string; method: string; threshold: number; source: string; trained_at: string;
-  classes: string[]; examples: Record<string, number>; left_out: Record<string, number> };
+  classes: string[]; examples: Record<string, number>; left_out: Record<string, number>;
+  image_method?: string; beta?: number; image_examples?: Record<string, number> };
 export type ClassifierInfo = { active_method: string; model: ClassifierCard | null;
   confirmed_examples: Record<string, number>; min_per_category: number };
 export type FolderSuggestions = { method: string; document_id: string; current_folder_id: string | null; reason?: string;

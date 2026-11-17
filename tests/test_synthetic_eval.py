@@ -1,9 +1,11 @@
 """Scoring of the synthetic-corpus evaluation (tools/evaluate_synthetic.py), end to end with a fake OCR engine."""
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
@@ -96,7 +98,9 @@ class EndToEndTests(unittest.TestCase):
             ensure_ascii=False), encoding='utf-8')
         QueueEngine.outputs = [INVOICE, LETTER.replace('الدائري', 'الداثري'), INVOICE]
 
-        report = ev.evaluate(corpus, work, engine_factory=QueueEngine, log=lambda *_: None)
+        # one queued output per page: a single OCR path (the default reads three, ADR 0016)
+        with mock.patch.dict(os.environ, {'SMARTARCHIVE_OCR_PATHS': 'standard'}):
+            report = ev.evaluate(corpus, work, engine_factory=QueueEngine, log=lambda *_: None)
 
         self.assertEqual(report['pages'], 3)
         self.assertEqual(report['ocr']['by_layout']['simple']['pages'], 3)

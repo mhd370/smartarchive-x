@@ -13,6 +13,7 @@ from smartarchive.domain.documents import ArchiveError, ProcessingStatus
 from smartarchive.persistence.database import Database
 from smartarchive.persistence.storage import OriginalStore
 from smartarchive.processing.pipeline import OcrService, Worker
+from smartarchive.processing.render import page_images
 from smartarchive.search.pages import PageTexts
 from smartarchive.search import ranked, rerank, semantic
 from smartarchive.services import graph
@@ -40,7 +41,17 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
     accounts = Accounts(db, settings.session_hours)
     texts = PageTexts(db)
     ocr = OcrService(db, originals, settings, engine_factory, texts)
-    classes = Classifications(db, models_dir=settings.storage_dir / 'models')
+
+    def first_page(document_id: str):
+        """The first page of the verified original at 72 dpi, for the classifier's layout features (ADR 0015)."""
+        record = db.get(document_id)
+        if not record:
+            return None
+        for _, image, _, _ in page_images(originals.verified_path(record), record['mime_type'], 72):
+            return image
+        return None
+
+    classes = Classifications(db, models_dir=settings.storage_dir / 'models', page_image=first_page)
     backups = Backups(settings.storage_dir, settings.backup_dir, '0.16.0')
     folders = Folders(db)
     metadata = Metadata(db)
@@ -89,7 +100,7 @@ def create_app(settings: Settings | None = None, engine_factory=None) -> FastAPI
         if indexer:
             indexer.stop()
 
-    api = FastAPI(title='SmartArchive-X', version='0.16.0', lifespan=lifespan)
+    api = FastAPI(title='SmartArchive-X', version='0.18.0', lifespan=lifespan)
     api.state.documents, api.state.settings, api.state.ocr, api.state.accounts = documents, settings, ocr, accounts
     api.state.texts, api.state.classes = texts, classes
     api.state.folders, api.state.metadata, api.state.relations = folders, metadata, relations

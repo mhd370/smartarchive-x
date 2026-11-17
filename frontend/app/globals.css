@@ -171,3 +171,9 @@
 .folder-suggestion { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
 .folder-chip { display: inline-flex; gap: 6px; align-items: center; padding: 2px 8px; border: 1px dashed var(--line, #c9c9c9);
   border-radius: 999px; font-size: 0.85rem; }
+
+.region-box { position: absolute; border: 2px dashed; border-radius: 3px; pointer-events: auto; }
+.region-box small { position: absolute; top: -1.4em; inset-inline-start: 0; font-size: 10px; padding: 0 4px; border-radius: 3px; color: #fff; white-space: nowrap; }
+.region-heading { border-color: #08786d; background: #08786d14; } .region-heading small { background: #08786d; }
+.region-stamp { border-color: #6b4fbb; background: #6b4fbb14; border-radius: 50%; } .region-stamp small { background: #6b4fbb; }
+.region-figure { border-color: #8a8f98; background: #8a8f9814; } .region-figure small { background: #6b7079; }

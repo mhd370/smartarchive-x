@@ -83,6 +83,9 @@ export default function SystemPage() {
       {classifier.loading ? <Loading /> : classifier.error ? <Failure message={classifier.error} retry={classifier.reload} /> : classifier.data && <dl className="quality-facts">
         <div><dt>طريقة الاقتراح الحالية</dt><dd dir="ltr">{classifier.data.active_method}</dd></div>
         <div><dt>آخر تدريب</dt><dd>{classifier.data.model ? date(classifier.data.model.trained_at) : "لم يُدرَّب بعد"}</dd></div>
+        <div><dt>شكل الصفحة (الصورة)</dt><dd>{classifier.data.model?.image_method
+          ? <>مدمج مع النص <small className="muted" dir="ltr">{classifier.data.model.image_method}</small></>
+          : "غير مستخدم"}</dd></div>
         <div><dt>الفئات في النموذج</dt><dd>{classifier.data.model ? number(classifier.data.model.classes.length) : "—"}</dd></div>
         <div><dt>وثائق مؤكدة متاحة للتدريب</dt><dd>{number(Object.values(classifier.data.confirmed_examples).reduce((a, b) => a + b, 0))}
           <br /><small className="muted">يلزم {number(classifier.data.min_per_category)} لكل فئة على الأقل</small></dd></div>

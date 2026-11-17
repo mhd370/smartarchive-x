@@ -33,6 +33,12 @@ const actions: Record<string, string> = {
 };
 const routes = { fast: "سريع (صفحة نظيفة)", layout: "واعٍ بالتخطيط", advanced: "متقدم (صفحة صعبة)" };
 const layouts = { simple: "عمود واحد", multi_column: "متعدد الأعمدة", tabular: "يحتوي جدولًا" };
+const regionNames: Record<string, string> = { heading: "عنوان", stamp: "ختم", figure: "صورة/رسم" };
+const pathNames: Record<string, string> = { standard: "الأساسي", binarized: "ثنائي اللون", upscaled: "مكبّر", "model-ara": "نموذج ara" };
+type Region = { kind: string; box: number[]; text?: string };
+function stepOf(analysis: PageAnalysis | undefined, name: string): Record<string, unknown> | undefined {
+  return analysis?.preprocessing.find(step => step.step === name);
+}
 const dpiSources = { metadata: "من بيانات الملف", rendered: "دقة التحويل من PDF", estimated_a4: "تقدير بافتراض A4" };
 const tone = (value: number | null) => value === null ? "unknown" : value >= 0.85 ? "good" : value >= 0.6 ? "fair" : "low";
 
@@ -47,6 +53,7 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
   const [previewError, setPreviewError] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(true);
   const [showBoxes, setShowBoxes] = useState(true);
+  const [showRegions, setShowRegions] = useState(false);
   const [focused, setFocused] = useState<number>();
   const [actionError, setActionError] = useState(""), [starting, setStarting] = useState(false);
   const [textVersion, setTextVersion] = useState(0);  // a page correction can change the suggested category
@@ -75,6 +82,7 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
   const readyRun = run?.status === "ready" ? run : undefined;
   const ocrPage = useApi<OcrPage>(readyRun ? `/documents/${id}/ocr/pages/${page}?run_id=${readyRun.id}` : null);
   const analysis: PageAnalysis | undefined = summary.data?.pages.find(item => item.page_no === page);
+  const regions = ((stepOf(analysis, "regions")?.regions as Region[] | undefined) ?? []);
 
   useEffect(() => {
     // Search results link to a specific page with ?page=n; out-of-range values are clamped below.
@@ -124,6 +132,7 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
           <div className="preview-tools">
             {matched.size > 0 && <span className="evidence-tag" role="status">مظلّل: {number(matched.size)} سطر يحوي «<span dir="auto">{query}</span>»</span>}
             {lines.length > 0 && <label className="toggle"><input type="checkbox" checked={showBoxes} onChange={e => setShowBoxes(e.target.checked)} />إظهار مواقع النص</label>}
+            {regions.length > 0 && <label className="toggle"><input type="checkbox" checked={showRegions} onChange={e => setShowRegions(e.target.checked)} />إظهار العناوين والأختام</label>}
             <span className="neutral-tag">الصفحة {number(page)} من {number(doc.page_count)}</span>
           </div>
         </div>
@@ -140,6 +149,11 @@ export default function Detail({ id, initialPage = 1, query = "" }: { id: string
                 style={{ left: `${line.box[0] * 100}%`, top: `${line.box[1] * 100}%`,
                   width: `${(line.box[2] - line.box[0]) * 100}%`, height: `${(line.box[3] - line.box[1]) * 100}%` }}
                 onMouseEnter={() => setFocused(line.line_no)} onMouseLeave={() => setFocused(undefined)} />)}
+              {showRegions && regions.map((region, index) => <span key={`r${index}`} aria-hidden="true"
+                className={`region-box region-${region.kind}`} title={region.text ?? regionNames[region.kind] ?? region.kind}
+                style={{ left: `${region.box[0] * 100}%`, top: `${region.box[1] * 100}%`,
+                  width: `${(region.box[2] - region.box[0]) * 100}%`, height: `${(region.box[3] - region.box[1]) * 100}%` }}>
+                <small>{regionNames[region.kind] ?? region.kind}</small></span>)}
             </div>
           </>}
         </div>
@@ -291,7 +305,20 @@ function QualityPanel({ analysis }: { analysis: PageAnalysis }) {
       </dl>
       <details className="steps-detail"><summary>خطوات المعالجة المسبقة</summary><ul>
         {analysis.preprocessing.map((step, index) => <li key={index} dir="ltr">{JSON.stringify(step)}</li>)}</ul></details>
-      <p className="muted small-note">جميع الصفحات تُستخرج حاليًا بمسار Tesseract الأساسي؛ تفعيل التوجيه بين المسارات الثلاثة في المرحلة التالية.</p>
+      <OcrPathNote analysis={analysis} />
     </>}
   </section>;
+}
+
+function OcrPathNote({ analysis }: { analysis: PageAnalysis }) {
+  const paths = stepOf(analysis, "ocr_paths");
+  const found = (stepOf(analysis, "regions")?.regions as Region[] | undefined) ?? [];
+  const count = (kind: string) => found.filter(region => region.kind === kind).length;
+  const tried = (paths?.tried ?? {}) as Record<string, number | null>;
+  return <div className="muted small-note">
+    {paths ? <p>مسار OCR المختار تلقائيًا: <b>{pathNames[String(paths.chosen)] ?? String(paths.chosen)}</b> من بين {number(Object.keys(tried).length)} مسارات قُرئت
+      ({Object.entries(tried).map(([name, value]) => `${pathNames[name] ?? name} ${percent(value)}`).join(" · ")})</p>
+      : <p>قُرئت الصفحة بالمسار الأساسي وحده.</p>}
+    {found.length > 0 && <p>المناطق: {number(count("heading"))} عنوان · {number(count("stamp"))} ختم · {number(count("figure"))} صورة/رسم</p>}
+  </div>;
 }

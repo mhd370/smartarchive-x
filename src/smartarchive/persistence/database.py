@@ -304,4 +304,9 @@ MIGRATIONS = [(2, '''
     CREATE TABLE IF NOT EXISTS page_vectors (
         document_id TEXT NOT NULL, page_no INTEGER NOT NULL, text_hash TEXT NOT NULL, model TEXT NOT NULL,
         dim INTEGER NOT NULL, vectors BLOB NOT NULL, PRIMARY KEY(document_id, page_no));
+'''),
+    # Sprint 13: first-page layout features for the multimodal classifier (derived from the original, ADR 0015).
+    (9, '''
+    CREATE TABLE IF NOT EXISTS document_images (
+        document_id TEXT PRIMARY KEY, method TEXT NOT NULL, features BLOB NOT NULL, created_at TEXT NOT NULL);
 ''')]

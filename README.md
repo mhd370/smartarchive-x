@@ -165,6 +165,14 @@ Sprint 12 experiments run on the stored OCR text of those evaluation archives, w
 .\.venv\Scripts\python.exe tools/search_experiments.py data\synthetic\corpus_v2 --work results\synthetic_eval\corpus_v2_layout --choose-from results\synthetic_eval\corpus_v1_layout\search_experiments.json
 ```
 
+Sprint 13 (ADR 0016): OCR paths read pages again (about 20 and 30 minutes); regions use the stored OCR lines:
+
+```powershell
+.\.venv\Scripts\python.exe tools/ocr_paths_experiment.py data\synthetic\corpus_v1 --per-level 14
+.\.venv\Scripts\python.exe tools/ocr_paths_experiment.py data\synthetic\corpus_v2 --per-level 20 --choose-from results\ocr_paths\corpus_v1.json
+.\.venv\Scripts\python.exe tools/region_experiment.py data\synthetic\corpus_v2 --work results\synthetic_eval\corpus_v2_layout
+```
+
 The evaluation never touches the real archive: it builds a throw-away one under `results\synthetic_eval\`
 and writes `report.json` and `report.md` there. Rules are changed only after looking at `corpus_v1`; `corpus_v2`
 is used once, to report.
